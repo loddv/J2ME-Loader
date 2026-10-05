@@ -78,6 +78,9 @@ jobs:
           EOF
           fi
 
+      - name: Make Gradle wrapper executable
+        run: chmod +x gradlew
+
       - name: Build APK
         env:
           FLAVOR: ${{ inputs.flavor }}
