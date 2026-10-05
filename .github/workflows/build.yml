@@ -167,6 +167,7 @@ jobs:
         env:
           FLAVOR: ${{ inputs.flavor }}
           BUILD_TYPE: ${{ inputs.type }}
+          NDK_VERSION: ${{ inputs.ndk-version }}
         run: gradle "assemble${FLAVOR^}${BUILD_TYPE^}"
 
       - name: Upload APK
