@@ -1,0 +1,92 @@
+name: Build Android app
+
+on:
+  workflow_dispatch:
+    inputs:
+      flavor:
+        description: Product flavor
+        type: choice
+        required: true
+        default: open
+        options:
+          - play
+          - open
+          - fdroid
+          - dev
+          - midlet
+      type:
+        description: Android build type
+        type: choice
+        required: true
+        default: debug
+        options:
+          - debug
+          - release
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: ndk;22.1.7171670
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Configure signing
+        env:
+          BUILD_TYPE: ${{ inputs.type }}
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_ALIAS: ${{ secrets.ANDROID_KEYSTORE_ALIAS }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [[ "$BUILD_TYPE" == "release" ]]; then
+            for name in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_ALIAS ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_PASSWORD; do
+              if [[ -z "${!name}" ]]; then
+                echo "Missing required secret: $name" >&2
+                exit 1
+              fi
+            done
+            printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$GITHUB_WORKSPACE/release.jks"
+            cat > keystore.properties <<EOF
+          keyAlias=$ANDROID_KEYSTORE_ALIAS
+          keyPassword=$ANDROID_KEY_PASSWORD
+          storeFile=$GITHUB_WORKSPACE/release.jks
+          storePassword=$ANDROID_KEYSTORE_PASSWORD
+          EOF
+          else
+            cat > keystore.properties <<EOF
+          keyAlias=unused
+          keyPassword=unused
+          storeFile=$GITHUB_WORKSPACE/unused.jks
+          storePassword=unused
+          EOF
+          fi
+
+      - name: Build APK
+        env:
+          FLAVOR: ${{ inputs.flavor }}
+          BUILD_TYPE: ${{ inputs.type }}
+        run: ./gradlew "assemble${FLAVOR^}${BUILD_TYPE^}"
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: j2me-loader-${{ inputs.flavor }}-${{ inputs.type }}
+          path: app/build/outputs/apk/${{ inputs.flavor }}/${{ inputs.type }}/*.apk
+          if-no-files-found: error
