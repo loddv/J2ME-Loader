@@ -22,6 +22,35 @@ on:
         options:
           - debug
           - release
+      gradle-version:
+        description: Gradle version
+        type: choice
+        required: true
+        default: '8.7'
+        options:
+          - '8.7'
+          - '8.8'
+          - '8.9'
+          - '8.10'
+          - '8.11'
+          - '8.12'
+          - '8.13'
+          - '8.14'
+          - '9.0'
+          - '9.1'
+          - '9.2'
+          - '9.3'
+          - '9.4'
+          - '9.5'
+          - '9.6'
+          - '9.7'
+          - '9.8'
+          - '9.9'
+          - '9.10'
+          - '9.11'
+          - '9.12'
+          - '9.13'
+          - '9.14'
 
 permissions:
   contents: read
@@ -46,6 +75,8 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: ${{ inputs.gradle-version }}
 
       - name: Configure signing
         env:
@@ -78,14 +109,11 @@ jobs:
           EOF
           fi
 
-      - name: Make Gradle wrapper executable
-        run: chmod +x gradlew
-
       - name: Build APK
         env:
           FLAVOR: ${{ inputs.flavor }}
           BUILD_TYPE: ${{ inputs.type }}
-        run: ./gradlew "assemble${FLAVOR^}${BUILD_TYPE^}"
+        run: gradle "assemble${FLAVOR^}${BUILD_TYPE^}"
 
       - name: Upload APK
         uses: actions/upload-artifact@v7
