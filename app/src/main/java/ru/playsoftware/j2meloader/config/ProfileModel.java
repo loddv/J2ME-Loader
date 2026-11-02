@@ -177,7 +177,7 @@ public class ProfileModel {
 		version = VERSION;
 		screenWidth = 240;
 		screenHeight = 320;
-		screenBackgroundColor = 0xD0D0D0;
+		screenBackgroundColor = 0x000000;
 		screenScaleType = 1;
 		screenGravity = 1;
 		screenScaleRatio = 100;
@@ -196,11 +196,11 @@ public class ProfileModel {
 		vkButtonShape = VirtualKeyboard.ROUND_RECT_SHAPE;
 		vkAlpha = 64;
 
-		vkBgColor = 0xD0D0D0;
+		vkBgColor = 0x000000;
 		vkFgColor = 0x000080;
 		vkBgColorSelected = 0x000080;
 		vkFgColorSelected = 0xFFFFFF;
-		vkOutlineColor = 0xFFFFFF;
+		vkOutlineColor = 0x000080;
 		systemProperties = ContextHolder.getAssetAsString("defaults/system.props");
 
 		disablePause = false;

@@ -5,10 +5,10 @@
     <color name="file_picker_accent">#ffb62e</color>
 
     <!--light theme colors-->
-    <color name="primary">#212121</color>
+    <color name="primary">#1c1c1c</color>
     <color name="primary_dark">#1c1c1c</color>
     <color name="accent">#ff2e51</color>
-    <color name="background">#fafafa</color>
+    <color name="background">#1c1c1c</color>
     <color name="text_primary">#000000</color>
     <color name="text_secondary">#353535</color>
     <color name="btn_bg_normal">#2e2e2e</color>

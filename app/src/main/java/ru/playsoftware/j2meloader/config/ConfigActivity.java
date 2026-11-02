@@ -74,6 +74,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.Objects;
 import java.util.Set;
 
 import javax.microedition.shell.MicroActivity;
@@ -188,7 +189,7 @@ public class ConfigActivity extends BaseActivity implements View.OnClickListener
 		binding = ActivityConfigBinding.inflate(getLayoutInflater());
 		View view = binding.getRoot();
 		setContentView(view);
-		getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+		Objects.requireNonNull(getSupportActionBar()).setDisplayHomeAsUpEnabled(true);
 		display = getWindowManager().getDefaultDisplay();
 		fragmentManager = getSupportFragmentManager();
 
@@ -199,6 +200,10 @@ public class ConfigActivity extends BaseActivity implements View.OnClickListener
 		addFontSizePreset("176 x 220", 15, 18, 22);
 		addFontSizePreset("240 x 320", 18, 22, 26);
 		addFontSizePreset("360 x 640", 22, 26, 30);
+		addFontSizePreset("480 x 800", 26, 30, 34);
+		addFontSizePreset("640 x 360", 30, 34, 38);
+		addFontSizePreset("800 x 480", 34, 38, 42);
+
 
 		binding.keepAspectRatioToggle.setOnCheckedChangeListener(this::onLockAspectChanged);
 		binding.showScreenSizePresets.setOnClickListener(this::showScreenPresets);
@@ -644,7 +649,7 @@ public class ConfigActivity extends BaseActivity implements View.OnClickListener
 			ShaderInfo shader = params.shader;
 			int position = shader == null ? -1 : spShaderAdapter.getPosition(shader);
 			if (position > 0) {
-				spShaderAdapter.getItem(position).values = shader.values;
+				Objects.requireNonNull(spShaderAdapter.getItem(position)).values = shader.values;
 				binding.shaderSelector.setSelection(position);
 			}
 		}

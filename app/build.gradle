@@ -37,6 +37,20 @@ android {
                 storeFile file(keystoreProps['storeFile'])
                 storePassword keystoreProps['storePassword']
             }
+            if (System.getenv()['BITRISE_IO']) {
+                keyAlias System.getenv('BITRISEIO_ANDROID_KEYSTORE_ALIAS')
+                keyPassword System.getenv('BITRISEIO_ANDROID_KEYSTORE_PRIVATE_KEY_PASSWORD')
+                storeFile rootProject.file(System.getenv('BITRISEIO_ANDROID_KEYSTORE_NAME'))
+                storePassword System.getenv('BITRISEIO_ANDROID_KEYSTORE_PASSWORD')
+            }
+//            else {
+//                Properties keystoreProps = new Properties()
+//                keystoreProps.load(new FileInputStream(rootProject.file("keystore.properties")))
+//                keyAlias keystoreProps['keyAlias']
+//                keyPassword keystoreProps['keyPassword']
+//                storeFile file(keystoreProps['storeFile'])
+//                storePassword keystoreProps['storePassword']
+//            }
         }
     }
 
