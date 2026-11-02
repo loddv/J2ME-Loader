@@ -1,0 +1,161 @@
+name: Build Android app
+
+on:
+  workflow_dispatch:
+    inputs:
+      flavor:
+        description: Product flavor
+        type: choice
+        required: true
+        default: open
+        options:
+          - play
+          - open
+          - fdroid
+          - dev
+          - midlet
+      type:
+        description: Android build type
+        type: choice
+        required: true
+        default: debug
+        options:
+          - debug
+          - release
+      gradle-version:
+        description: Gradle version
+        type: choice
+        required: true
+        default: '8.7'
+        options:
+          - '8.7'
+          - '8.8'
+          - '8.9'
+          - '8.10'
+          - '8.11'
+          - '8.12'
+          - '8.13'
+          - '8.14'
+          - '9.0'
+          - '9.1'
+          - '9.2'
+          - '9.3'
+          - '9.4'
+          - '9.5'
+          - '9.6'
+          - '9.7'
+          - '9.8'
+          - '9.9'
+          - '9.10'
+          - '9.11'
+          - '9.12'
+          - '9.13'
+          - '9.14'
+      ndk-version:
+        description: Android NDK version
+        type: choice
+        required: true
+        default: '22.1.7171670'
+        options:
+        - 'NDK r22b'
+        - '22.1.7171670'
+        - 'NDK r23 LTS'
+        - '23.0.7599858'
+        - '23.1.7779620'
+        - '23.2.8568313'
+        - 'NDK r24'
+        - '24.0.8215888'
+        - 'NDK r25 LTS'
+        - '25.1.8937393'
+        - '25.2.9519653'
+        - 'NDK r26 LTS'
+        - '26.1.10909125'
+        - '26.3.11579264'
+        - 'NDK r27 LTS'
+        - '27.1.12297006'
+        - '27.2.12479018'
+        - 'NDK r28'
+        - '28.0.12433566'
+        - '28.0.12674087'
+        - 'NDK r29'
+        - '29.0.13113005'
+        - '29.0.13599879'
+        - '29.0.13846066'
+        - '29.0.14033849'
+        - '29.0.14206865'
+        - 'NDK r30'
+        - '30.0.14904198'
+        - '30.0.15729638'
+        - '30.0.16138531'
+        - '30.0.16248370'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Java
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: ndk;${{ inputs.ndk-version }}
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: ${{ inputs.gradle-version }}
+
+      - name: Configure signing
+        env:
+          BUILD_TYPE: ${{ inputs.type }}
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_ALIAS: ${{ secrets.ANDROID_KEYSTORE_ALIAS }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [[ "$BUILD_TYPE" == "release" ]]; then
+            for name in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_ALIAS ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_PASSWORD; do
+              if [[ -z "${!name}" ]]; then
+                echo "Missing required secret: $name" >&2
+                exit 1
+              fi
+            done
+            printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$GITHUB_WORKSPACE/release.jks"
+            cat > keystore.properties <<EOF
+          keyAlias=$ANDROID_KEYSTORE_ALIAS
+          keyPassword=$ANDROID_KEY_PASSWORD
+          storeFile=$GITHUB_WORKSPACE/release.jks
+          storePassword=$ANDROID_KEYSTORE_PASSWORD
+          EOF
+          else
+            cat > keystore.properties <<EOF
+          keyAlias=unused
+          keyPassword=unused
+          storeFile=$GITHUB_WORKSPACE/unused.jks
+          storePassword=unused
+          EOF
+          fi
+
+      - name: Build APK
+        env:
+          FLAVOR: ${{ inputs.flavor }}
+          BUILD_TYPE: ${{ inputs.type }}
+          NDK_VERSION: ${{ inputs.ndk-version }}
+        run: gradle "assemble${FLAVOR^}${BUILD_TYPE^}"
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v7
+        with:
+          name: j2me-loader-${{ inputs.flavor }}-${{ inputs.type }}
+          path: app/build/outputs/apk/${{ inputs.flavor }}/${{ inputs.type }}/*.apk
+          if-no-files-found: error
