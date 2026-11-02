@@ -1,6 +1,6 @@
 /*
- * Copyright 2017 Nikita Shakarun
- * Copyright 2023 Arman Jussupgaliyev
+ * Copyright 2017-2020 Nikita Shakarun
+ * Copyright 2021-2023 Yury Kharchenko
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,19 +17,25 @@
 
 package com.nokia.mid.sound;
 
+import static javax.microedition.media.PlayerListener.*;
+
+import android.util.Log;
+
 import java.io.ByteArrayInputStream;
-import java.io.IOException;
 
 import javax.microedition.media.Manager;
-import javax.microedition.media.MediaException;
 import javax.microedition.media.Player;
 import javax.microedition.media.PlayerListener;
+import javax.microedition.media.control.VolumeControl;
 import javax.microedition.media.tone.MidiToneConstants;
 import javax.microedition.media.tone.ToneManager;
 
 public class Sound {
+	private static final String TAG = "Nokia.Sound";
+
 	public static final int FORMAT_TONE = 1;
 	public static final int FORMAT_WAV = 5;
+
 	public static final int SOUND_PLAYING = 0;
 	public static final int SOUND_STOPPED = 1;
 	public static final int SOUND_UNINITIALIZED = 3;
@@ -44,14 +50,19 @@ public class Sound {
 			3839, 4067, 4309, 4565, 4837, 5125, 5429, 5752, 6094, 6456, 6840, 7247, 7678, 8134,
 			8618, 9130, 9673, 10249, 10858, 11504, 12188, 12912
 	};
-	private Player player;
-	private int state;
-	private SoundListener soundListener;
-	private PlayerListener playerListener = (player, event, eventData) -> {
-		if ("endOfMedia".equals(event)) {
-			postEvent(SOUND_STOPPED);
+
+	private final PlayerListener playerListener = (player, event, eventData) -> {
+		switch (event) {
+			case END_OF_MEDIA, STOPPED -> postEvent(SOUND_STOPPED);
+			case STARTED -> postEvent(SOUND_PLAYING);
+			case CLOSED -> postEvent(SOUND_UNINITIALIZED);
 		}
 	};
+
+	private SoundListener soundListener;
+	private Player player;
+	private int state;
+	private int gain = 255;
 
 	public Sound(int freq, long duration) {
 		init(freq, duration);
@@ -70,7 +81,7 @@ public class Sound {
 	}
 
 	public int getGain() {
-		return -1;
+		return gain;
 	}
 
 	public int getState() {
@@ -91,80 +102,94 @@ public class Sound {
 			}
 			int note = convertFreqToNote(freq);
 			player = ToneManager.createPlayer(note, (int) duration, MidiToneConstants.TONE_MAX_VOLUME);
+			if (player instanceof VolumeControl control) {
+				control.setLevel(gain * 100 / 255);
+			}
+			player.addPlayerListener(playerListener);
 			state = SOUND_STOPPED;
-		} catch (MediaException e) {
-			e.printStackTrace();
+		} catch (Exception e) {
+			Log.e(TAG, "init(freq): ", e);
+			state = SOUND_UNINITIALIZED;
 		}
 	}
 
 	public void init(byte[] data, int type) {
+		if (data == null) {
+			throw new NullPointerException();
+		}
 		try {
-			String mime;
-			switch (type) {
-				case FORMAT_TONE:
+			String mime = switch (type) {
+				case FORMAT_TONE -> {
 					ToneVerifier.fix(data);
-					mime = "audio/midi";
-					break;
-				case FORMAT_WAV:
-					mime = "audio/wav";
-					break;
-				default:
-					throw new IllegalArgumentException();
-			}
+					yield "audio/midi";
+				}
+				case FORMAT_WAV -> "audio/wav";
+				default -> throw new IllegalArgumentException();
+			};
 			if (player != null) {
 				player.close();
 			}
 			player = Manager.createPlayer(new ByteArrayInputStream(data), mime);
+			if (player instanceof VolumeControl control) {
+				control.setLevel(gain * 100 / 255);
+			}
 			player.addPlayerListener(playerListener);
 			state = SOUND_STOPPED;
-		} catch (IOException e) {
-			e.printStackTrace();
+		} catch (Exception e) {
+			Log.e(TAG, "init(byte[]): ", e);
+			state = SOUND_UNINITIALIZED;
 		}
 	}
 
 	public void play(int loop) {
 		try {
-			if (loop == 0) {
-				loop = -1;
-			}
-			if (player.getState() == Player.STARTED) {
-				player.stop();
-			}
-			player.setLoopCount(loop);
+			player.stop();
+			player.setLoopCount(loop == 0 ? -1 : loop);
+			player.prefetch();
+			player.setMediaTime(0);
 			player.start();
-			postEvent(SOUND_PLAYING);
-		} catch (MediaException e) {
-			e.printStackTrace();
+		} catch (Exception e) {
+			Log.e(TAG, "play: ", e);
 		}
 	}
 
 	public void release() {
-		player.close();
-		postEvent(SOUND_UNINITIALIZED);
+		try {
+			player.close();
+		} catch (Exception e) {
+			Log.e(TAG, "release: ", e);
+		}
 	}
 
 	public void resume() {
 		try {
 			player.start();
-			postEvent(SOUND_PLAYING);
-		} catch (MediaException e) {
-			e.printStackTrace();
+		} catch (Exception e) {
+			Log.e(TAG, "resume: ", e);
 		}
 	}
 
-	public void setGain(int i) {
+	public void setGain(int gain) {
+		if (gain < 0) {
+			gain = 0;
+		} else if (gain > 255) {
+			gain = 255;
+		}
+		this.gain = gain;
+		if (player instanceof VolumeControl control) {
+			control.setLevel(gain * 100 / 255);
+		}
 	}
 
-	public void setSoundListener(SoundListener soundListener) {
-		this.soundListener = soundListener;
+	public void setSoundListener(SoundListener listener) {
+		soundListener = listener;
 	}
 
 	public void stop() {
 		try {
 			player.stop();
-			postEvent(SOUND_STOPPED);
-		} catch (MediaException e) {
-			e.printStackTrace();
+		} catch (Exception e) {
+			Log.e(TAG, "stop: ", e);
 		}
 	}
 
@@ -175,26 +200,27 @@ public class Sound {
 		}
 	}
 
-	public static int convertFreqToNote(int freq) {
+	private static int convertFreqToNote(int freq) {
 		int low = 0;
 		int high = FREQ_TABLE.length - 1;
 
 		while (low <= high) {
-			int mid = (low + high) >>> 1;
+			int mid = (low + high) >> 1;
 			int midVal = FREQ_TABLE[mid];
 
-			if (midVal < freq) {
+			if (freq > midVal) {
 				low = mid + 1;
-			} else if (midVal > freq) {
+			} else if (freq < midVal) {
 				high = mid - 1;
 			} else {
 				return mid;
 			}
 		}
-		if ((freq - FREQ_TABLE[low - 1]) < (FREQ_TABLE[low] - freq)) {
-			return low - 1;
-		} else {
-			return low;
+
+		if (freq < (FREQ_TABLE[low - 1] + FREQ_TABLE[low]) >> 1) {
+			low--;
 		}
+
+		return low;
 	}
 }

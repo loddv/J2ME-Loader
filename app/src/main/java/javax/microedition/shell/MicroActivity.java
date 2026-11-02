@@ -1,7 +1,7 @@
 /*
  * Copyright 2015-2016 Nickolay Savchenko
- * Copyright 2017-2018 Nikita Shakarun
- * Copyright 2019-2022 Yury Kharchenko
+ * Copyright 2017-2021 Nikita Shakarun
+ * Copyright 2019-2023 Yury Kharchenko
  * Copyright 2022-2024 Arman Jussupgaliyev
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -28,6 +28,8 @@ import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.content.res.TypedArray;
+import android.graphics.Color;
+import android.media.MediaScannerConnection;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -43,19 +45,28 @@ import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.Window;
 import android.view.WindowManager;
 import android.view.inputmethod.InputMethodManager;
-import android.widget.AdapterView.AdapterContextMenuInfo;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.Toast;
 
+import androidx.activity.EdgeToEdge;
+import androidx.activity.SystemBarStyle;
 import androidx.annotation.NonNull;
+import androidx.annotation.StringRes;
 import androidx.appcompat.app.ActionBar;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.app.AppCompatDelegate;
 import androidx.appcompat.widget.AppCompatCheckBox;
+import androidx.core.content.ContextCompat;
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
 import androidx.preference.PreferenceManager;
 
 import org.acra.ACRA;
@@ -71,7 +82,6 @@ import javax.microedition.lcdui.Alert;
 import javax.microedition.lcdui.Canvas;
 import javax.microedition.lcdui.Displayable;
 import javax.microedition.lcdui.Form;
-import javax.microedition.lcdui.List;
 import javax.microedition.lcdui.ViewHandler;
 import javax.microedition.lcdui.event.SimpleEvent;
 import javax.microedition.lcdui.keyboard.VirtualKeyboard;
@@ -95,11 +105,17 @@ public class MicroActivity extends AppCompatActivity {
 
 	private Displayable current;
 	private boolean visible;
+	private boolean pauseSuppressed;
+	private boolean pauseDisabled;
 	private boolean actionBarEnabled;
 	private boolean statusBarEnabled;
+	private boolean cutoutsEnabled;
 	private MicroLoader microLoader;
 	private String appName;
 	private InputMethodManager inputMethodManager;
+	private boolean imeVisible;
+	private int statusBarInset;
+	private int toolbarHeight;
 	private int menuKey;
 	private String appPath;
 
@@ -107,7 +123,12 @@ public class MicroActivity extends AppCompatActivity {
 
 	@Override
 	public void onCreate(Bundle savedInstanceState) {
+		SharedPreferences sp = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
+		if (sp.getBoolean(PREF_BLACK_BACKGROUND, false)) {
+			getTheme().applyStyle(R.style.ThemeOverlay_App_Dark, true);
+		}
 		lockNightMode();
+
 		super.onCreate(savedInstanceState);
 		ContextHolder.setCurrentActivity(this);
 
@@ -116,13 +137,11 @@ public class MicroActivity extends AppCompatActivity {
 		setContentView(view);
 		setSupportActionBar(binding.toolbar);
 
-		SharedPreferences sp = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
 		actionBarEnabled = sp.getBoolean(PREF_TOOLBAR, false);
 		statusBarEnabled = sp.getBoolean(PREF_STATUSBAR, false);
-		if (sp.getBoolean(PREF_ADD_CUTOUT_AREA, false) && Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-			getWindow().getAttributes().layoutInDisplayCutoutMode =
-					WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
-		}
+		cutoutsEnabled = sp.getBoolean(PREF_ADD_CUTOUT_AREA, false) &&
+				Build.VERSION.SDK_INT >= Build.VERSION_CODES.P;
+		setupInsets();
 		if (sp.getBoolean(PREF_KEEP_SCREEN, false)) {
 			getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 		}
@@ -181,6 +200,7 @@ public class MicroActivity extends AppCompatActivity {
 			}
 		}
 		setOrientation(orientation);
+		pauseDisabled = microLoader.isPauseDisabled();
 		menuKey = microLoader.getMenuKeyCode();
 		inputMethodManager = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
 
@@ -205,14 +225,18 @@ public class MicroActivity extends AppCompatActivity {
 	public void onResume() {
 		super.onResume();
 		visible = true;
-		MidletThread.resumeApp();
+		if (!pauseSuppressed) {
+			MidletThread.resumeApp();
+		}
 	}
 
 	@Override
 	public void onPause() {
-		visible = false;
 		hideSoftInput();
-		MidletThread.pauseApp();
+		if (!pauseSuppressed && !pauseDisabled) {
+			visible = false;
+			MidletThread.pauseApp();
+		}
 		super.onPause();
 	}
 
@@ -226,8 +250,7 @@ public class MicroActivity extends AppCompatActivity {
 	@Override
 	public void onWindowFocusChanged(boolean hasFocus) {
 		super.onWindowFocusChanged(hasFocus);
-		if (hasFocus && Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT &&
-				current instanceof Canvas) {
+		if (hasFocus && current instanceof Canvas) {
 			hideSystemUI();
 		}
 	}
@@ -306,26 +329,78 @@ public class MicroActivity extends AppCompatActivity {
 		return toolBarHeight;
 	}
 
-	private void hideSystemUI() {
-		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
-			int flags = View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY;
-			if (!statusBarEnabled) {
-				flags |= View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-						| View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN | View.SYSTEM_UI_FLAG_FULLSCREEN;
+	private void setupInsets() {
+		EdgeToEdge.enable(
+				this,
+				SystemBarStyle.dark(ContextCompat.getColor(this, R.color.primary)),
+				SystemBarStyle.dark(Color.BLACK)
+		);
+
+		ViewCompat.setOnApplyWindowInsetsListener(binding.midletFrame, (v, windowInsets) -> {
+			int typeMask = WindowInsetsCompat.Type.systemBars() | WindowInsetsCompat.Type.ime();
+			if (!cutoutsEnabled) {
+				typeMask |= WindowInsetsCompat.Type.displayCutout();
 			}
-			getWindow().getDecorView().setSystemUiVisibility(flags);
-		} else if (!statusBarEnabled) {
-			getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,
-					WindowManager.LayoutParams.FLAG_FULLSCREEN);
+			Insets insets = windowInsets.getInsets(typeMask);
+			statusBarInset = insets.top;
+
+			ViewGroup.LayoutParams params = binding.statusbarView.getLayoutParams();
+			params.height = insets.top;
+			binding.statusbarView.setLayoutParams(params);
+
+			v.setPadding(insets.left, 0, insets.right, insets.bottom);
+			updateOverlayLocation();
+			return WindowInsetsCompat.CONSUMED;
+		});
+
+		// On API < 30 the IME insets are not dispatched
+		if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+			getWindow().getDecorView().getViewTreeObserver().addOnGlobalLayoutListener(() -> {
+				WindowInsetsCompat rootInsets = ViewCompat.getRootWindowInsets(binding.midletFrame);
+				boolean visible = rootInsets != null
+						&& rootInsets.isVisible(WindowInsetsCompat.Type.ime());
+				if (visible == imeVisible) {
+					return;
+				}
+				imeVisible = visible;
+				if (current instanceof Canvas) {
+					if (visible) {
+						showSystemUI();
+					} else {
+						hideSystemUI();
+					}
+				} else { ViewCompat.requestApplyInsets(binding.midletFrame); }
+			});
 		}
 	}
 
-	private void showSystemUI() {
-		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
-			getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_VISIBLE);
-		} else {
-			getWindow().clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
+	private void updateOverlayLocation() {
+		binding.overlayView.setLocation(0, statusBarInset + toolbarHeight);
+	}
+
+	private WindowInsetsControllerCompat getWindowInsetsController() {
+		Window window = getWindow();
+		return WindowCompat.getInsetsController(window, window.getDecorView());
+	}
+
+	private void hideSystemUI() {
+		int typeMask = WindowInsetsCompat.Type.navigationBars();
+		if (!statusBarEnabled) {
+			typeMask |= WindowInsetsCompat.Type.statusBars();
 		}
+
+		WindowInsetsControllerCompat windowInsetsController = getWindowInsetsController();
+		windowInsetsController.setSystemBarsBehavior(WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+		windowInsetsController.hide(typeMask);
+		// For API < 30
+		ViewCompat.requestApplyInsets(binding.midletFrame);
+	}
+
+	private void showSystemUI() {
+		WindowInsetsControllerCompat windowInsetsController = getWindowInsetsController();
+		windowInsetsController.show(WindowInsetsCompat.Type.systemBars());
+		// For API < 30
+		ViewCompat.requestApplyInsets(binding.midletFrame);
 	}
 
 	public void setCurrent(Displayable displayable) {
@@ -339,6 +414,10 @@ public class MicroActivity extends AppCompatActivity {
 
 	public boolean isVisible() {
 		return visible;
+	}
+
+	public void setPauseSuppressed(boolean pauseSuppressed) {
+		this.pauseSuppressed = pauseSuppressed;
 	}
 
 	public void showExitConfirmation() {
@@ -378,8 +457,7 @@ public class MicroActivity extends AppCompatActivity {
 
 	@Override
 	public void openOptionsMenu() {
-		if (!actionBarEnabled &&
-				Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT && current instanceof Canvas) {
+		if (!actionBarEnabled && current instanceof Canvas) {
 			showSystemUI();
 		}
 		super.openOptionsMenu();
@@ -421,9 +499,7 @@ public class MicroActivity extends AppCompatActivity {
 	public boolean onCreateOptionsMenu(Menu menu) {
 		MenuInflater inflater = getMenuInflater();
 		inflater.inflate(R.menu.midlet_displayable, menu);
-		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR2) {
-			menu.findItem(R.id.action_lock_orientation).setVisible(true);
-		}
+		menu.findItem(R.id.action_lock_orientation).setVisible(true);
 		if (actionBarEnabled) {
 			menu.findItem(R.id.action_ime_keyboard).setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS);
 			menu.findItem(R.id.action_take_screenshot).setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS);
@@ -513,6 +589,7 @@ public class MicroActivity extends AppCompatActivity {
 			public void onSuccess(@NonNull String s) {
 				Toast.makeText(MicroActivity.this, getString(R.string.screenshot_saved)
 						+ " " + s, Toast.LENGTH_LONG).show();
+				MediaScannerConnection.scanFile(MicroActivity.this, new String[]{s}, null, null);
 			}
 
 			@Override
@@ -634,9 +711,6 @@ public class MicroActivity extends AppCompatActivity {
 	public boolean onContextItemSelected(@NonNull MenuItem item) {
 		if (current instanceof Form) {
 			((Form) current).contextMenuItemSelected(item);
-		} else if (current instanceof List) {
-			AdapterContextMenuInfo info = (AdapterContextMenuInfo) item.getMenuInfo();
-			((List) current).contextMenuItemSelected(item, info.position);
 		}
 
 		return super.onContextItemSelected(item);
@@ -649,6 +723,10 @@ public class MicroActivity extends AppCompatActivity {
 
 	public String getAppName() {
 		return appName;
+	}
+
+	public void toast(@StringRes int message) {
+		runOnUiThread(() -> Toast.makeText(this, message, Toast.LENGTH_LONG).show());
 	}
 
 	private class SetCurrentEvent extends SimpleEvent {
@@ -672,7 +750,8 @@ public class MicroActivity extends AppCompatActivity {
 			binding.displayableContainer.removeAllViews();
 			ActionBar actionBar = Objects.requireNonNull(getSupportActionBar());
 			LinearLayout.LayoutParams layoutParams = (LinearLayout.LayoutParams) binding.toolbar.getLayoutParams();
-			int toolbarHeight = 0;
+			int toolbarPadding = binding.toolbar.getPaddingTop();
+			toolbarHeight = 0;
 			if (next instanceof Canvas) {
 				hideSystemUI();
 				if (!actionBarEnabled) {
@@ -691,8 +770,9 @@ public class MicroActivity extends AppCompatActivity {
 				toolbarHeight = getToolBarHeight();
 				layoutParams.height = toolbarHeight;
 			}
-			binding.overlayView.setLocation(0, toolbarHeight);
+			updateOverlayLocation();
 			binding.toolbar.setLayoutParams(layoutParams);
+			binding.toolbar.setPadding(0, toolbarPadding, 0, 0);
 			invalidateOptionsMenu();
 			if (next != null) {
 				binding.displayableContainer.addView(next.getDisplayableView());

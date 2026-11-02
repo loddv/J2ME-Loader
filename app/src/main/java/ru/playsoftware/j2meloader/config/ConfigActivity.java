@@ -17,6 +17,11 @@
 
 package ru.playsoftware.j2meloader.config;
 
+import static ru.playsoftware.j2meloader.util.Constants.ACTION_EDIT;
+import static ru.playsoftware.j2meloader.util.Constants.ACTION_EDIT_PROFILE;
+import static ru.playsoftware.j2meloader.util.Constants.KEY_MIDLET_NAME;
+import static ru.playsoftware.j2meloader.util.Constants.PREF_DEFAULT_PROFILE;
+
 import android.annotation.SuppressLint;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -29,26 +34,43 @@ import android.os.storage.StorageManager;
 import android.os.storage.StorageVolume;
 import android.text.Editable;
 import android.text.InputFilter;
+import android.text.SpannableString;
 import android.text.Spanned;
-import android.text.TextUtils;
 import android.text.TextWatcher;
+import android.text.style.ForegroundColorSpan;
 import android.util.Log;
 import android.util.TypedValue;
 import android.view.Display;
+import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.View;
+import android.view.ViewGroup;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.CompoundButton;
 import android.widget.EditText;
+import android.widget.ListView;
+import android.widget.TextView;
 import android.widget.Toast;
+
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.appcompat.app.AlertDialog;
+import androidx.appcompat.widget.PopupMenu;
+import androidx.core.content.ContextCompat;
+import androidx.core.widget.TextViewCompat;
+import androidx.fragment.app.FragmentManager;
+import androidx.preference.PreferenceManager;
 
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -57,27 +79,22 @@ import java.util.Set;
 import javax.microedition.shell.MicroActivity;
 import javax.microedition.util.ContextHolder;
 
-import androidx.annotation.NonNull;
-import androidx.appcompat.app.AlertDialog;
-import androidx.appcompat.widget.PopupMenu;
-import androidx.fragment.app.FragmentManager;
-import androidx.preference.PreferenceManager;
-import androidx.core.widget.TextViewCompat;
-
 import ru.playsoftware.j2meloader.R;
 import ru.playsoftware.j2meloader.base.BaseActivity;
 import ru.playsoftware.j2meloader.databinding.ActivityConfigBinding;
+import ru.playsoftware.j2meloader.databinding.DialogChangePresetBinding;
 import ru.playsoftware.j2meloader.settings.KeyMapperActivity;
 import ru.playsoftware.j2meloader.util.FileUtils;
 import yuku.ambilwarna.AmbilWarnaDialog;
 
-import static ru.playsoftware.j2meloader.util.Constants.*;
-
 public class ConfigActivity extends BaseActivity implements View.OnClickListener, ShaderTuneDialog.Callback {
-
 	private static final String TAG = ConfigActivity.class.getSimpleName();
+	private static final String RESOLUTION_TEMPLATE = " x ";
 
 	protected ArrayList<String> screenPresets = new ArrayList<>();
+	protected Set<String> customPresets = new HashSet<>();
+	private AlertDialog presetsDialog;
+	private ResolutionAdapter presetsAdapter;
 
 	protected ArrayList<int[]> fontPresetValues = new ArrayList<>();
 	protected ArrayList<String> fontPresetTitles = new ArrayList<>();
@@ -93,12 +110,23 @@ public class ConfigActivity extends BaseActivity implements View.OnClickListener
 	private ArrayAdapter<ShaderInfo> spShaderAdapter;
 	private String workDir;
 	private boolean needShow;
-
 	private ActivityConfigBinding binding;
+
+	private final ActivityResultLauncher<Intent> filesLauncher =
+			registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
+				if (result.getResultCode() != RESULT_OK) {
+					return;
+				}
+				initSoundBankSpinner();
+				spShaderAdapter = null;
+				if (binding.graphicalModeSelector.getSelectedItemPosition() == 1) {
+					initShaderSpinner();
+				}
+			});
 
 	@SuppressLint({"StringFormatMatches", "StringFormatInvalid"})
 	@Override
-	public void onCreate(Bundle savedInstanceState) {
+	public void onCreate(@Nullable Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
 		Intent intent = getIntent();
 		String action = intent.getAction();
@@ -266,6 +294,48 @@ public class ConfigActivity extends BaseActivity implements View.OnClickListener
 				new ColorTextWatcher(binding.keyboardPressedButtonBackgroundColorHex));
 		binding.keyboardOutlineColorHex.addTextChangedListener(
 				new ColorTextWatcher(binding.keyboardOutlineColorHex));
+        initSoundBankSpinner();
+        binding.browseShaders.setOnClickListener(v ->
+				browseFiles(ConfigFilesActivity.FileType.SHADERS));
+        binding.browseSoundbanks.setOnClickListener(v ->
+				browseFiles(ConfigFilesActivity.FileType.SOUNDBANKS));
+    }
+
+	private void browseFiles(ConfigFilesActivity.FileType type) {
+		Intent intent = new Intent(this, ConfigFilesActivity.class)
+				.putExtra(ConfigFilesActivity.EXTRA_TYPE, type);
+		try {
+			filesLauncher.launch(intent);
+		} catch (Exception e) {
+			Toast.makeText(this, R.string.error_no_picker, Toast.LENGTH_SHORT).show();
+			Log.e(TAG, "Can't open files browser", e);
+		}
+	}
+
+	private void initSoundBankSpinner() {
+		File dir = new File(workDir + Config.SOUNDBANKS_DIR);
+		if (!dir.exists()) {
+			//noinspection ResultOfMethodCallIgnored
+			dir.mkdirs();
+		}
+		ArrayAdapter<String> spSoundBankAdapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item);
+		spSoundBankAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+		binding.soundbankSelector.setAdapter(spSoundBankAdapter);
+		spSoundBankAdapter.add(getString(R.string.default_label, "Android"));
+		String[] files = dir.list((d, n) -> new File(d, n).isFile());
+		if (files != null) {
+			Arrays.sort(files, (o1, o2) -> {
+				int res = o1.toLowerCase().compareTo(o2.toLowerCase());
+				if (res != 0) {
+					return res;
+				}
+				return o1.compareTo(o2);
+			});
+			spSoundBankAdapter.addAll(files);
+		}
+		spSoundBankAdapter.notifyDataSetChanged();
+		int position = spSoundBankAdapter.getPosition(params.soundBank);
+		binding.soundbankSelector.setSelection(Math.max(position, 0));
 	}
 
 	private void onLockAspectChanged(CompoundButton cb, boolean isChecked) {
@@ -338,8 +408,8 @@ public class ConfigActivity extends BaseActivity implements View.OnClickListener
 			//noinspection ResultOfMethodCallIgnored
 			dir.mkdirs();
 		}
-		ArrayList<ShaderInfo> infos = new ArrayList<>();
-		spShaderAdapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, infos);
+		ArrayList<ShaderInfo> list = new ArrayList<>();
+		spShaderAdapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, list);
 		spShaderAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
 		binding.shaderSelector.setAdapter(spShaderAdapter);
 		File[] files = dir.listFiles((f) -> f.isFile() && f.getName().toLowerCase().endsWith(".ini"));
@@ -351,7 +421,7 @@ public class ConfigActivity extends BaseActivity implements View.OnClickListener
 				for (String line : split) {
 					if (line.startsWith("[")) {
 						if (info != null && info.fragment != null && info.vertex != null) {
-							infos.add(info);
+							list.add(info);
 						}
 						info = new ShaderInfo(line.replaceAll("[\\[\\]]", ""), "unknown");
 					} else if (info != null) {
@@ -363,18 +433,18 @@ public class ConfigActivity extends BaseActivity implements View.OnClickListener
 					}
 				}
 				if (info != null && info.fragment != null && info.vertex != null) {
-					infos.add(info);
+					list.add(info);
 				}
 			}
-			Collections.sort(infos);
+			Collections.sort(list);
 		}
-		infos.add(0, new ShaderInfo(getString(R.string.identity_filter), "woesss"));
+		list.add(0, new ShaderInfo(getString(R.string.identity_filter), "woesss"));
 		spShaderAdapter.notifyDataSetChanged();
 		ShaderInfo selected = params.shader;
 		if (selected != null) {
-			int position = infos.indexOf(selected);
+			int position = list.indexOf(selected);
 			if (position > 0) {
-				infos.get(position).values = selected.values;
+				list.get(position).values = selected.values;
 				binding.shaderSelector.setSelection(position);
 			}
 		}
@@ -405,35 +475,30 @@ public class ConfigActivity extends BaseActivity implements View.OnClickListener
 
 			@Override
 			public void onNothingSelected(AdapterView<?> parent) {
-
 			}
 		});
-
 	}
 
 	private void showCharsetPicker(View v) {
 		String[] charsets = Charset.availableCharsets().keySet().toArray(new String[0]);
 		new AlertDialog.Builder(this).setItems(charsets, (d, w) -> {
-			String enc = "microedition.encoding: " + charsets[w];
-			String[] props = binding.systemProperties.getText().toString().split("[\\n\\r]+");
-			int propsLength = props.length;
-			if (propsLength == 0) {
-				binding.systemProperties.setText(enc);
+			String text = binding.systemProperties.getText().toString();
+			String key = "microedition.encoding:";
+			int idx = text.lastIndexOf(key);
+			if (idx != -1) {
+				int nl = text.indexOf('\n', idx);
+				text = text.substring(0, idx + key.length()) + " " + charsets[w] + (nl == -1 ? "\n" : text.substring(nl));
+				binding.systemProperties.setText(text);
 				return;
 			}
-			int i = propsLength - 1;
-			while (i >= 0) {
-				if (props[i].startsWith("microedition.encoding")) {
-					props[i] = enc;
-					break;
-				}
-				i--;
+
+			if (!text.endsWith("\n")) {
+                binding.systemProperties.append("\n");
 			}
-			if (i < 0) {
-				binding.systemProperties.append(enc);
-				return;
-			}
-			binding.systemProperties.setText(TextUtils.join("\n", props));
+            binding.systemProperties.append(key);
+            binding.systemProperties.append(" ");
+            binding.systemProperties.append(charsets[w]);
+            binding.systemProperties.append("\n");
 		}).setTitle(R.string.pref_encoding_title).show();
 	}
 
@@ -482,6 +547,7 @@ public class ConfigActivity extends BaseActivity implements View.OnClickListener
 	private void fillScreenSizePresets(int w, int h) {
 		ArrayList<String> screenPresets = this.screenPresets;
 		screenPresets.clear();
+		customPresets.clear();
 
 		screenPresets.add("128 x 128");
 		screenPresets.add("128 x 160");
@@ -493,36 +559,41 @@ public class ConfigActivity extends BaseActivity implements View.OnClickListener
 		screenPresets.add("800 x 480");
 
 		if (w > h) {
-			screenPresets.add(h * 3 / 4 + " x " + h);
-			screenPresets.add(h * 4 / 3 + " x " + h);
+			screenPresets.add(h * 3 / 4 + RESOLUTION_TEMPLATE + h);
+			screenPresets.add(h * 4 / 3 + RESOLUTION_TEMPLATE + h);
 		} else {
-			screenPresets.add(w + " x " + w * 4 / 3);
-			screenPresets.add(w + " x " + w * 3 / 4);
+			screenPresets.add(w + RESOLUTION_TEMPLATE + w * 4 / 3);
+			screenPresets.add(w + RESOLUTION_TEMPLATE + w * 3 / 4);
 		}
 
-		screenPresets.add(w + " x " + h);
+		screenPresets.add(w + RESOLUTION_TEMPLATE + h);
 		Set<String> preset = PreferenceManager.getDefaultSharedPreferences(this)
 				.getStringSet("ResolutionsPreset", null);
 		if (preset != null) {
 			screenPresets.addAll(preset);
+			customPresets.addAll(preset);
 		}
-		Collections.sort(screenPresets, (o1, o2) -> {
-			int sep1 = o1.indexOf(" x ");
-			int sep2 = o2.indexOf(" x ");
-			if (sep1 == -1) {
-				if (sep2 != -1) return -1;
-				else return 0;
-			} else if (sep2 == -1) return 1;
-			int r = Integer.decode(o1.substring(0, sep1)).compareTo(Integer.decode(o2.substring(0, sep2)));
-			if (r != 0) return r;
-			return Integer.decode(o1.substring(sep1 + 3)).compareTo(Integer.decode(o2.substring(sep2 + 3)));
-		});
+		sortPresets();
 		String prev = null;
 		for (Iterator<String> iterator = screenPresets.iterator(); iterator.hasNext(); ) {
 			String next = iterator.next();
 			if (next.equals(prev)) iterator.remove();
 			else prev = next;
 		}
+	}
+
+	private void sortPresets() {
+		Collections.sort(screenPresets, (o1, o2) -> {
+			int sep1 = o1.indexOf(RESOLUTION_TEMPLATE);
+			int sep2 = o2.indexOf(RESOLUTION_TEMPLATE);
+			if (sep1 == -1) {
+				if (sep2 != -1) return -1;
+				else return 0;
+			} else if (sep2 == -1) return 1;
+			int r = Integer.valueOf(o1.substring(0, sep1)).compareTo(Integer.decode(o2.substring(0, sep2)));
+			if (r != 0) return r;
+			return Integer.valueOf(o1.substring(sep1 + 3)).compareTo(Integer.decode(o2.substring(sep2 + 3)));
+		});
 	}
 
 	private void addFontSizePreset(String title, int small, int medium, int large) {
@@ -608,7 +679,8 @@ public class ConfigActivity extends BaseActivity implements View.OnClickListener
 		if (systemProperties == null) {
 			systemProperties = ContextHolder.getAssetAsString("defaults/system.props");
 		}
-		binding.systemProperties.setText(systemProperties);
+		binding.systemProperties.setText(getSystemProperties(systemProperties));
+		binding.disablePauseToggle.setChecked(params.disablePause);
 	}
 
 	private void saveParams() {
@@ -696,7 +768,11 @@ public class ConfigActivity extends BaseActivity implements View.OnClickListener
 						binding.keyboardOutlineColorHex.getText().toString(), 16);
 			} catch (Exception ignored) {
 			}
-			params.systemProperties = getSystemProperties();
+			params.soundBank = binding.soundbankSelector.getSelectedItemPosition() > 0 ? (String)
+					binding.soundbankSelector.getSelectedItem() : null;
+			params.systemProperties = getSystemProperties(binding.systemProperties.getText().toString());
+
+			params.disablePause = binding.disablePauseToggle.isChecked();
 
 			ProfilesManager.saveConfig(params);
 		} catch (Throwable t) {
@@ -705,24 +781,22 @@ public class ConfigActivity extends BaseActivity implements View.OnClickListener
 	}
 
 	@NonNull
-	private String getSystemProperties() {
-		String s = binding.systemProperties.getText().toString();
-		String[] lines = s.split("\\n");
-		StringBuilder sb = new StringBuilder(s.length());
-		boolean validCharset = false;
+	private String getSystemProperties(String text) {
+		String[] lines = text.split("[\\r\\n]+");
+		ArrayList<String> list = new ArrayList<>();
+		Set<String> keys = new HashSet<>();
 		for (int i = lines.length - 1; i >= 0; i--) {
 			String line = lines[i];
-			if (line.trim().isEmpty()) continue;
-			if (line.startsWith("microedition.encoding:")) {
-				if (validCharset) continue;
-				try {
-					Charset.forName(line.substring(22).trim());
-					validCharset = true;
-				} catch (Exception ignored) {
-					continue;
-				}
+			int colon = line.indexOf(':');
+			if (colon != -1 && keys.add(line.substring(0, colon).trim())) {
+				list.add(line);
 			}
-			sb.append(line).append('\n');
+		}
+		Collections.sort(list);
+		StringBuilder sb = new StringBuilder();
+		for (String string : list) {
+			sb.append(string);
+			sb.append("\n");
 		}
 		return sb.toString();
 	}
@@ -820,19 +894,114 @@ public class ConfigActivity extends BaseActivity implements View.OnClickListener
 	}
 
 	private void showScreenPresets(View v) {
-		PopupMenu popup = new PopupMenu(this, v);
+		presetsAdapter = new ResolutionAdapter();
+		presetsDialog = new AlertDialog.Builder(this)
+				.setTitle(R.string.SIZE_PRESETS)
+				.setAdapter(presetsAdapter, (d, which) -> {
+					String string = screenPresets.get(which);
+					int separator = string.indexOf(RESOLUTION_TEMPLATE);
+					binding.screenWidth.setText(string.substring(0, separator));
+					binding.screenHeight.setText(string.substring(separator + 3));
+				})
+				.setNegativeButton(android.R.string.cancel, null)
+				.create();
+		presetsDialog.setOnShowListener(d -> {
+			ListView listView = ((AlertDialog) d).getListView();
+			listView.setOnItemLongClickListener((parent, view, position, id) -> {
+				String item = screenPresets.get(position);
+				if (!customPresets.contains(item)) {
+					Toast.makeText(this, R.string.preset_cannot_delete, Toast.LENGTH_SHORT).show();
+				} else {
+					showPresetPopup(view, item);
+				}
+				return true;
+			});
+		});
+		presetsDialog.show();
+	}
+
+	private void showPresetPopup(View anchor, String preset) {
+		PopupMenu popup = new PopupMenu(this, anchor);
 		Menu menu = popup.getMenu();
-		for (String preset : screenPresets) {
-			menu.add(preset);
-		}
-		popup.setOnMenuItemClickListener(item -> {
-			String string = item.getTitle().toString();
-			int separator = string.indexOf(" x ");
-			binding.screenWidth.setText(string.substring(0, separator));
-			binding.screenHeight.setText(string.substring(separator + 3));
+		SpannableString editLabel = new SpannableString(getString(R.string.edit));
+		editLabel.setSpan(new ForegroundColorSpan(ContextCompat.getColor(this, R.color.btn_bg_normal)), 0, editLabel.length(), 0);
+		menu.add(0, 0, 0, editLabel);
+		SpannableString deleteLabel = new SpannableString(getString(R.string.action_context_delete));
+		deleteLabel.setSpan(new ForegroundColorSpan(Color.RED), 0, deleteLabel.length(), 0);
+		menu.add(0, 1, 1, deleteLabel);
+		popup.setOnMenuItemClickListener(menuItem -> {
+			if (menuItem.getItemId() == 0) {
+				showEditResolutionDialog(preset);
+			} else {
+				if (presetsDialog != null) presetsDialog.dismiss();
+				new AlertDialog.Builder(this)
+						.setTitle(R.string.delete_resolution_title)
+						.setMessage(getString(R.string.delete_resolution_message, preset))
+						.setPositiveButton(R.string.action_context_delete, (d, w) -> deleteCustomPreset(preset))
+						.setNegativeButton(android.R.string.cancel, null)
+						.show();
+			}
 			return true;
 		});
 		popup.show();
+	}
+
+	private void showEditResolutionDialog(String preset) {
+		int sep = preset.indexOf(RESOLUTION_TEMPLATE);
+		String currentWidth = preset.substring(0, sep);
+		String currentHeight = preset.substring(sep + 3);
+		DialogChangePresetBinding dialogBinding = DialogChangePresetBinding.inflate(LayoutInflater.from(this));
+		dialogBinding.etWidth.setText(currentWidth);
+		dialogBinding.etHeight.setText(currentHeight);
+		new AlertDialog.Builder(this)
+				.setTitle(R.string.edit_resolution_title)
+				.setView(dialogBinding.getRoot())
+				.setPositiveButton(R.string.save, (d, w) -> {
+					int newW = parseInt(dialogBinding.etWidth.getText().toString().trim());
+					int newH = parseInt(dialogBinding.etHeight.getText().toString().trim());
+					if (newW <= 0 || newH <= 0) {
+						Toast.makeText(this, R.string.error, Toast.LENGTH_SHORT).show();
+						return;
+					}
+					String newPreset = newW + RESOLUTION_TEMPLATE + newH;
+					if (!newPreset.equals(preset)) {
+						updateCustomPreset(preset, newPreset);
+					}
+				})
+				.setNegativeButton(android.R.string.cancel, null)
+				.show();
+	}
+
+	private void updateCustomPreset(String oldPreset, String newPreset) {
+		if (screenPresets.contains(newPreset)) {
+			Toast.makeText(this, R.string.not_saved_exists, Toast.LENGTH_SHORT).show();
+			return;
+		}
+		SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(this);
+		Set<String> saved = preferences.getStringSet("ResolutionsPreset", null);
+		Set<String> updated = saved != null ? new HashSet<>(saved) : new HashSet<>();
+		updated.remove(oldPreset);
+		updated.add(newPreset);
+		preferences.edit().putStringSet("ResolutionsPreset", updated).apply();
+		customPresets.remove(oldPreset);
+		screenPresets.remove(oldPreset);
+		customPresets.add(newPreset);
+		screenPresets.add(newPreset);
+		sortPresets();
+		if (presetsAdapter != null) presetsAdapter.notifyDataSetChanged();
+	}
+
+	private void deleteCustomPreset(String preset) {
+		SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(this);
+		Set<String> saved = preferences.getStringSet("ResolutionsPreset", null);
+		if (saved != null) {
+			Set<String> updated = new HashSet<>(saved);
+			updated.remove(preset);
+			preferences.edit().putStringSet("ResolutionsPreset", updated).apply();
+		}
+		customPresets.remove(preset);
+		screenPresets.remove(preset);
+		if (presetsAdapter != null) presetsAdapter.notifyDataSetChanged();
 	}
 
 	private void showColorPicker(EditText et) {
@@ -863,20 +1032,21 @@ public class ConfigActivity extends BaseActivity implements View.OnClickListener
 			Toast.makeText(this, R.string.error, Toast.LENGTH_SHORT).show();
 			return;
 		}
-		String preset = width + " x " + height;
+		String preset = width + RESOLUTION_TEMPLATE + height;
 		if (screenPresets.contains(preset)) {
 			Toast.makeText(this, R.string.not_saved_exists, Toast.LENGTH_SHORT).show();
 			return;
 		}
 
 		SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(this);
-		Set<String> set = preferences.getStringSet("ResolutionsPreset", null);
-		if (set == null) {
-			set = new HashSet<>(1);
-		}
+		Set<String> saved = preferences.getStringSet("ResolutionsPreset", null);
+		Set<String> set = saved != null ? new HashSet<>(saved) : new HashSet<>(1);
 		if (set.add(preset)) {
 			preferences.edit().putStringSet("ResolutionsPreset", set).apply();
 			screenPresets.add(preset);
+			customPresets.add(preset);
+			sortPresets();
+			if (presetsAdapter != null) presetsAdapter.notifyDataSetChanged();
 			Toast.makeText(this, R.string.saved, Toast.LENGTH_SHORT).show();
 		} else {
 			Toast.makeText(this, R.string.not_saved_exists, Toast.LENGTH_SHORT).show();
@@ -886,6 +1056,31 @@ public class ConfigActivity extends BaseActivity implements View.OnClickListener
 	@Override
 	public void onTuneComplete(float[] values) {
 		params.shader.values = values;
+	}
+
+	private class ResolutionAdapter extends ArrayAdapter<String> {
+		ResolutionAdapter() {
+			super(ConfigActivity.this, R.layout.item_resolution_preset, screenPresets);
+		}
+
+		@NonNull
+		@Override
+		public View getView(int position, @Nullable View convertView, @NonNull ViewGroup parent) {
+			if (convertView == null) {
+				convertView = getLayoutInflater().inflate(R.layout.item_resolution_preset, parent, false);
+			}
+			String item = getItem(position);
+			((TextView) convertView.findViewById(R.id.resolution_text)).setText(item);
+			View icon = convertView.findViewById(R.id.custom_icon);
+			if (customPresets.contains(item)) {
+				icon.setVisibility(View.VISIBLE);
+				icon.setOnClickListener(clickedView -> showPresetPopup(clickedView, item));
+			} else {
+				icon.setVisibility(View.GONE);
+				icon.setOnClickListener(null);
+			}
+			return convertView;
+		}
 	}
 
 	private static class ColorTextWatcher implements TextWatcher {

@@ -330,6 +330,14 @@
                     android:visibility="gone"
                     tools:visibility="visible" />
 
+                <ImageButton
+                    android:id="@+id/browse_shaders"
+                    style="@style/ImageButtonStyle"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:layout_marginStart="4dp"
+                    android:contentDescription="@string/browse"
+                    app:srcCompat="@drawable/ic_add" />
             </LinearLayout>
 
             <com.google.android.material.switchmaterial.SwitchMaterial
@@ -953,6 +961,60 @@
             <!-- Keyboard settings -->
         </androidx.constraintlayout.widget.ConstraintLayout><!-- Input -->
 
+        <!-- Audio -->
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:id="@+id/audio_config_root"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_margin="5dp"
+            android:background="?attr/bg_config_card"
+            android:padding="5dp">
+
+            <TextView
+                android:id="@+id/audio_config_title"
+                style="@style/ConfigTitleTextStyle"
+                android:text="Audio"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toTopOf="parent" />
+
+            <LinearLayout
+                android:id="@+id/soundbank_container"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:minHeight="40dp"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toBottomOf="@+id/audio_config_title">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="match_parent"
+                    android:gravity="center_vertical"
+                    android:text="Soundbank:"
+                    android:textAppearance="?android:attr/textAppearanceSmall"
+                    android:textColor="?attr/textColorSecondary"
+                    android:textSize="15sp" />
+
+                <Spinner
+                    android:id="@+id/soundbank_selector"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:textColor="?attr/textColorSecondary"
+                    android:textSize="15sp" />
+
+                <ImageButton
+                    android:id="@+id/browse_soundbanks"
+                    style="@style/ImageButtonStyle"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:layout_marginStart="4dp"
+                    android:contentDescription="@string/browse"
+                    app:srcCompat="@drawable/ic_add" />
+            </LinearLayout>
+        </androidx.constraintlayout.widget.ConstraintLayout><!-- Audio -->
+
         <!-- System Properties -->
         <androidx.constraintlayout.widget.ConstraintLayout
             android:id="@+id/system_properties_config_root"
@@ -995,6 +1057,40 @@
                 tools:ignore="UnusedAttribute" />
 
         </androidx.constraintlayout.widget.ConstraintLayout><!-- System Properties -->
+
+        <!-- Other -->
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:id="@+id/other_config_root"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_margin="5dp"
+            android:background="?attr/bg_config_card"
+            android:paddingTop="10dp"
+            app:elevation="2dp">
+
+            <TextView
+                android:id="@+id/config_other_title"
+                style="@style/ConfigTitleTextStyle"
+                android:layout_marginHorizontal="5dp"
+                android:text="@string/pref_other_options_title"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toTopOf="parent" />
+
+            <com.google.android.material.switchmaterial.SwitchMaterial
+                android:id="@+id/disable_pause_toggle"
+                style="@style/SwitchStyle"
+                android:layout_width="0dp"
+                android:layout_height="@dimen/height_config_row"
+                android:layout_marginHorizontal="5dp"
+                android:text="@string/pref_disable_pause"
+                app:layout_constrainedWidth="true"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toBottomOf="@+id/config_other_title"
+                app:layout_constraintWidth_min="wrap" />
+
+        </androidx.constraintlayout.widget.ConstraintLayout>
     </LinearLayout>
 
 </ScrollView>

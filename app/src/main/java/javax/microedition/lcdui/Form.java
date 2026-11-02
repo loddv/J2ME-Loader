@@ -54,13 +54,13 @@ public class Form extends Screen {
 			if (item == null) {
 				throw new NullPointerException("Item at index " + i + " is null");
 			}
-			if (item.hasOwnerForm()) {
+			if (item.hasOwner()) {
 				throw new IllegalStateException("Item at index " + i + " is already owned by another container");
 			}
 		}
 		for (Item item : elements) {
 			items.add(item);
-			item.setOwnerForm(this);
+			item.setOwner(this);
 		}
 	}
 
@@ -81,12 +81,12 @@ public class Form extends Screen {
 	}
 
 	public int append(Item item) {
-		if (item.hasOwnerForm()) {
+		if (item.hasOwner()) {
 			throw new IllegalStateException();
 		}
 
 		items.add(item);
-		item.setOwnerForm(this);
+		item.setOwner(this);
 		ViewHandler.postEvent(() -> {
 			LinearLayout layout = this.layout;
 			if (layout != null) {
@@ -97,12 +97,12 @@ public class Form extends Screen {
 	}
 
 	public void insert(int index, Item item) {
-		if (item.hasOwnerForm()) {
+		if (item.hasOwner()) {
 			throw new IllegalStateException();
 		}
 
 		items.add(index, item);
-		item.setOwnerForm(this);
+		item.setOwner(this);
 		ViewHandler.postEvent(() -> {
 			LinearLayout layout = this.layout;
 			if (layout != null) {
@@ -112,12 +112,12 @@ public class Form extends Screen {
 	}
 
 	public void set(int index, Item item) {
-		if (item.hasOwnerForm()) {
+		if (item.hasOwner()) {
 			throw new IllegalStateException();
 		}
 
-		items.set(index, item).setOwnerForm(null);
-		item.setOwnerForm(this);
+		items.set(index, item).setOwner(null);
+		item.setOwner(this);
 		ViewHandler.postEvent(() -> {
 			LinearLayout layout = this.layout;
 			if (layout != null) {
@@ -129,7 +129,7 @@ public class Form extends Screen {
 	}
 
 	public void delete(int index) {
-		items.remove(index).setOwnerForm(null);
+		items.remove(index).setOwner(null);
 
 		ViewHandler.postEvent(() -> {
 			LinearLayout layout = this.layout;
@@ -141,7 +141,7 @@ public class Form extends Screen {
 
 	public void deleteAll() {
 		for (Item item : items) {
-			item.setOwnerForm(null);
+			item.setOwner(null);
 		}
 
 		items.clear();

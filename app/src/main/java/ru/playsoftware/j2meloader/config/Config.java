@@ -1,5 +1,6 @@
 /*
- * Copyright 2018 Nikita Shakarun
+ * Copyright 2018-2019 Nikita Shakarun
+ * Copyright 2020-2023 Yury Kharchenko
  * Copyright 2022 Arman Jussupgaliyev
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,18 +18,23 @@
 
 package ru.playsoftware.j2meloader.config;
 
+import static ru.playsoftware.j2meloader.util.Constants.ACTION_EDIT;
+import static ru.playsoftware.j2meloader.util.Constants.KEY_MIDLET_NAME;
+import static ru.playsoftware.j2meloader.util.Constants.PREF_EMULATOR_DIR;
+
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.net.Uri;
 import android.os.Environment;
 
+import androidx.annotation.Keep;
+import androidx.preference.PreferenceManager;
+
 import java.io.File;
 
 import javax.microedition.shell.MicroActivity;
 import javax.microedition.util.ContextHolder;
-
-import androidx.preference.PreferenceManager;
 
 import ru.playsoftware.j2meloader.BuildConfig;
 import ru.playsoftware.j2meloader.R;
@@ -51,6 +57,8 @@ public class Config {
 	public static final String MIDLET_RES_FILE = "/res.jar";
 	public static final String SCREENSHOTS_DIR;
 	public static final String SHADERS_DIR = "/shaders/";
+	public static final String SOUNDBANKS_DIR = "/soundbanks/";
+	public static final String APPS_DB_NAME = "/J2ME-apps.db";
 
 	private static String emulatorDir;
 	private static String dataDir;
@@ -58,9 +66,10 @@ public class Config {
 	private static String profilesDir;
 	private static String appDir;
 
+	@Keep
 	private static final SharedPreferences.OnSharedPreferenceChangeListener sPrefListener =
 			(sharedPreferences, key) -> {
-				if (key.equals(PREF_EMULATOR_DIR)) {
+				if (PREF_EMULATOR_DIR.equals(key)) {
 					initDirs(sharedPreferences.getString(key, emulatorDir));
 				}
 			};
@@ -106,6 +115,10 @@ public class Config {
 
 	public static String getShadersDir() {
 		return emulatorDir + SHADERS_DIR;
+	}
+
+	public static String getSoundbanksDir() {
+		return emulatorDir + SOUNDBANKS_DIR;
 	}
 
 	public static String getFsInternalDir() {

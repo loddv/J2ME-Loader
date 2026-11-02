@@ -33,6 +33,7 @@ import androidx.core.content.ContextCompat;
 import org.acra.ACRA;
 import org.acra.ErrorReporter;
 
+import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -77,12 +78,13 @@ import ru.woesss.j2me.jar.Descriptor;
 
 public class MicroLoader {
 	private static final String TAG = MicroLoader.class.getName();
+	private static String soundBank;
 
+	ProfileModel params;
 	private final File appDir;
 	private final Context context;
 	private final String workDir;
 	private final String appDirName;
-	private ProfileModel params;
 
 	MicroLoader(Context context, String appPath) {
 		this.context = context;
@@ -229,6 +231,10 @@ public class MicroLoader {
 		return params.orientation;
 	}
 
+	public boolean isPauseDisabled() {
+		return params.disablePause;
+	}
+
 	void setLimitFps(int fps) {
 		if (fps == -1) Canvas.setLimitFps(params.fpsLimit);
 		else Canvas.setLimitFps(fps);
@@ -280,6 +286,10 @@ public class MicroLoader {
 
 			KeyMapper.setKeyMapping(params);
 			Canvas.setHasTouchInput(params.touchInput);
+			File sb = new File(workDir + Config.SOUNDBANKS_DIR + params.soundBank);
+			if (sb.exists()) {
+				soundBank = sb.getPath();
+			}
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
@@ -300,8 +310,9 @@ public class MicroLoader {
 					if (!screenshotDir.exists() && !screenshotDir.mkdirs()) {
 						throw new IOException("Can't create directory: " + screenshotDir);
 					}
-					FileOutputStream out = new FileOutputStream(screenshotFile);
-					bitmap.compress(Bitmap.CompressFormat.PNG, 100, out);
+					try (BufferedOutputStream out = new BufferedOutputStream(new FileOutputStream(screenshotFile))) {
+						bitmap.compress(Bitmap.CompressFormat.PNG, 100, out);
+					}
 					return screenshotFile.getAbsolutePath();
 				})
 				.observeOn(AndroidSchedulers.mainThread())
@@ -318,5 +329,9 @@ public class MicroLoader {
 			return KeyEvent.KEYCODE_BACK;
 		}
 		return mappings.keyAt(i);
+	}
+
+	public static String getSoundBank() {
+		return soundBank;
 	}
 }

@@ -1,7 +1,6 @@
 uniform mat4 uMatrix;
-uniform mat4 uMatrixMV;
-uniform bool uIsTransparency;
-uniform bool uIsPrimitive;
+uniform mat3 uNormalMatrix;
+uniform vec2 uTexSize;
 uniform float uAmbIntensity;
 attribute vec4 aPosition;
 attribute vec3 aNormal;
@@ -15,19 +14,13 @@ varying float vAmbIntensity;
 
 void main() {
     gl_Position = uMatrix * aPosition;
-    vNormal = mat3(uMatrixMV) * aNormal;
-    if (uIsPrimitive) {
-        vIsTransparency = uIsTransparency ? 1.0 : 0.0;
-        vIsReflect = 1.0;
-        vAmbIntensity = uAmbIntensity;
-    } else {
-        vIsTransparency = aMaterial[2];
-        vIsReflect = aMaterial[1];
-        vAmbIntensity = aMaterial[0] > 0.5 ? uAmbIntensity : -1.0;
-    }
+    vNormal = uNormalMatrix * aNormal;
+    vIsTransparency = aMaterial[2];
+    vIsReflect = aMaterial[1];
+    vAmbIntensity = aMaterial[0] > 0.5 ? uAmbIntensity : -1.0;
 #ifdef FILTER
-    vTexture = aColorData + 0.5;
+    vTexture = (aColorData + 0.5) / uTexSize;
 #else
-    vTexture = aColorData;
+    vTexture = aColorData / uTexSize;
 #endif
 }

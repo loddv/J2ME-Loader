@@ -1,6 +1,7 @@
 /*
  * Copyright 2015-2016 Nickolay Savchenko
- * Copyright 2017-2018 Nikita Shakarun
+ * Copyright 2017-2020 Nikita Shakarun
+ * Copyright 2020-2023 Yury Kharchenko
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,16 +19,16 @@
 package ru.playsoftware.j2meloader.util;
 
 import android.content.Context;
+import android.database.Cursor;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Environment;
+import android.provider.OpenableColumns;
 import android.util.Log;
 
 import androidx.activity.result.contract.ActivityResultContract;
+import androidx.annotation.NonNull;
 
-import com.nononsenseapps.filepicker.Utils;
-
-import java.io.DataInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -36,11 +37,13 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.channels.FileChannel;
+import java.nio.charset.Charset;
+import java.util.List;
 
+import kotlin.io.FilesKt;
 import ru.playsoftware.j2meloader.config.Config;
 
 public class FileUtils {
-
 	private static final String TAG = FileUtils.class.getName();
 	private static final String TEMP_JAR_NAME = "tmp.jar";
 	private static final String TEMP_JAD_NAME = "tmp.jad";
@@ -72,8 +75,10 @@ public class FileUtils {
 	}
 
 	public static void copyFileUsingChannel(File source, File dest) throws IOException {
-		try (FileChannel sourceChannel = new FileInputStream(source).getChannel();
-			 FileChannel destChannel = new FileOutputStream(dest).getChannel()) {
+		try (FileInputStream fis = new FileInputStream(source);
+			 FileChannel sourceChannel = fis.getChannel();
+			 FileOutputStream fos = new FileOutputStream(dest);
+			 FileChannel destChannel = fos.getChannel()) {
 			destChannel.transferFrom(sourceChannel, 0, sourceChannel.size());
 		}
 	}
@@ -81,7 +86,7 @@ public class FileUtils {
 	public static boolean deleteDirectory(File dir) {
 		if (dir.isDirectory()) {
 			File[] listFiles = dir.listFiles();
-			if (listFiles != null && listFiles.length != 0) {
+			if (listFiles != null) {
 				for (File file : listFiles) {
 					deleteDirectory(file);
 				}
@@ -104,16 +109,6 @@ public class FileUtils {
 				}
 			}
 		}
-		if ((context.getPackageName() + ".provider").equals(uri.getAuthority())) {
-			try {
-				File file = Utils.getFileForUri(uri);
-				if (file.isFile()) {
-					return file;
-				}
-			} catch (Exception e) {
-				e.printStackTrace();
-			}
-		}
 		File tmpDir = new File(context.getCacheDir(), "installer");
 		if (!tmpDir.exists() && !tmpDir.mkdirs()) {
 			throw new IOException("Can't create directory: " + tmpDir);
@@ -131,6 +126,7 @@ public class FileUtils {
 			} else {
 				file = new File(tmpDir, TEMP_JAD_NAME);
 			}
+			//noinspection IOStreamConstructor
 			try (OutputStream out = new FileOutputStream(file)) {
 				out.write(buf, 0, len);
 				while ((len = in.read(buf)) > 0) {
@@ -141,12 +137,52 @@ public class FileUtils {
 		return file;
 	}
 
-	public static byte[] getBytes(File file) throws IOException {
-		try (DataInputStream dis = new DataInputStream(new FileInputStream(file))) {
-			byte[] b = new byte[(int) file.length()];
-			dis.readFully(b);
-			return b;
+	public static void copyFileFromUri(Context context, Uri uri, File dest) throws IOException {
+		try (InputStream in = context.getContentResolver().openInputStream(uri);
+			 OutputStream out = new FileOutputStream(dest)) {
+			if (in == null) {
+				throw new IOException("Can't read data from uri: " + uri);
+			}
+			byte[] buffer = new byte[BUFFER_SIZE];
+			int len;
+			while ((len = in.read(buffer)) > 0) {
+				out.write(buffer, 0, len);
+			}
+		} catch (IOException | RuntimeException e) {
+			//noinspection ResultOfMethodCallIgnored
+			dest.delete();
+			throw e;
 		}
+	}
+
+	@NonNull
+	public static String getDisplayName(@NonNull Context context, Uri uri) {
+		if ("file".equals(uri.getScheme())) {
+			String path = uri.getPath();
+			if (path != null) {
+				return new File(path).getName();
+			}
+		}
+		try (Cursor cursor = context.getContentResolver().query(uri,
+				new String[]{OpenableColumns.DISPLAY_NAME}, null, null, null)) {
+			if (cursor != null && cursor.moveToFirst()) {
+				int column = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME);
+				if (column != -1) {
+					String name = cursor.getString(column);
+					if (name != null) {
+						return name;
+					}
+				}
+			}
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		String name = uri.getLastPathSegment();
+		return name == null ? "" : name;
+	}
+
+	public static byte[] getBytes(File file) throws IOException {
+		return FilesKt.readBytes(file);
 	}
 
 	public static void clearDirectory(File dir) {
@@ -164,41 +200,11 @@ public class FileUtils {
 		}
 	}
 
-	static void moveFiles(File src, File dst) {
-		if (src.renameTo(dst)) return;
-		File[] files = src.listFiles();
-		if (files == null) {
-			return;
-		}
-		if (!dst.mkdirs()) {
-			Log.e(TAG, "moveFiles() can't create directory: " + dst);
-		}
-		for (File file : files) {
-			File to = new File(dst, file.getName());
-			if (file.isDirectory()) {
-				moveFiles(file, to);
-			} else if (!file.renameTo(to)) {
-				try {
-					copyFileUsingChannel(file, to);
-					if (!file.delete()) {
-						Log.e(TAG, "moveFiles() can't delete: " + file);
-					}
-				} catch (IOException e) {
-					Log.e(TAG, "moveFiles() can't move [" + file + "] to [" + to + "]", e);
-				}
-			}
-		}
-		if (!src.delete()) {
-			Log.e(TAG, "moveFiles() can't delete: " + src);
-		}
-	}
-
 	public static String getText(String path) {
-		try (DataInputStream dis = new DataInputStream(new FileInputStream(path))) {
-			byte[] buf = new byte[dis.available()];
-			dis.readFully(buf);
-			return new String(buf);
-		} catch (IOException e) {
+		try {
+			//noinspection CharsetObjectCanBeUsed
+			return FilesKt.readText(new File(path), Charset.forName("UTF-8"));
+		} catch (Exception e) {
 			Log.e(TAG, "getText: " + path, e);
 		}
 		return "";
@@ -208,6 +214,8 @@ public class FileUtils {
 		if ((dir.isDirectory() || dir.mkdirs()) && dir.canWrite()) {
 			//noinspection ResultOfMethodCallIgnored
 			new File(dir, Config.SHADERS_DIR).mkdir();
+			//noinspection ResultOfMethodCallIgnored
+			new File(dir, Config.SOUNDBANKS_DIR).mkdir();
 			try {
 				File nomedia = new File(dir, ".nomedia");
 				//noinspection ResultOfMethodCallIgnored
@@ -224,7 +232,7 @@ public class FileUtils {
 		return Build.VERSION.SDK_INT < Build.VERSION_CODES.Q || Environment.isExternalStorageLegacy();
 	}
 
-	public static ActivityResultContract<String,Uri> getFilePicker() {
+	public static ActivityResultContract<String, List<Uri>> getFilePicker() {
 		if (isExternalStorageLegacy()) {
 			return new PickFileResultContract();
 		} else {

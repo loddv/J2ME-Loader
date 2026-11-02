@@ -27,13 +27,12 @@ import android.view.ViewConfiguration;
 import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
+import androidx.annotation.Nullable;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AlertDialog;
 import androidx.core.app.ActivityCompat;
 import androidx.lifecycle.ViewModelProvider;
 import androidx.preference.PreferenceManager;
-
-import com.nononsenseapps.filepicker.Utils;
 
 import java.io.File;
 import java.util.Map;
@@ -64,7 +63,7 @@ public class MainActivity extends BaseActivity {
 	private AppListModel appListModel;
 
 	@Override
-	public void onCreate(Bundle savedInstanceState) {
+	public void onCreate(@Nullable Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.activity_main);
 		if (FileUtils.isExternalStorageLegacy()) {
@@ -99,7 +98,7 @@ public class MainActivity extends BaseActivity {
 		File dir = new File(emulatorDir);
 		if (dir.isDirectory() && dir.canWrite()) {
 			FileUtils.initWorkDir(dir);
-			appListModel.getAppRepository().onWorkDirReady();
+			appListModel.onWorkDirReady();
 			return;
 		}
 		if (dir.exists() || dir.getParentFile() == null || !dir.getParentFile().isDirectory()
@@ -153,7 +152,7 @@ public class MainActivity extends BaseActivity {
 			checkAndCreateDirs();
 			return;
 		}
-		File file = Utils.getFileForUri(uri);
+		File file = new File(uri.getPath());
 		applyWorkDir(file);
 	}
 

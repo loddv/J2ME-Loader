@@ -17,16 +17,13 @@
 package javax.microedition.lcdui;
 
 import android.content.Context;
-import android.os.Build;
 import android.view.View;
 
-import androidx.annotation.RequiresApi;
 import androidx.camera.view.PreviewView;
 
 import javax.microedition.media.CameraController;
 import javax.microedition.util.ContextHolder;
 
-@RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
 public class VideoItem extends Item {
 	private PreviewView view;
 	private final CameraController controller;
@@ -40,6 +37,8 @@ public class VideoItem extends Item {
 		if (view == null) {
 			Context context = ContextHolder.getAppContext();
 			view = new PreviewView(context);
+			// Scrolling support
+			view.setImplementationMode(PreviewView.ImplementationMode.COMPATIBLE);
 			controller.setUp(view);
 		}
 		return view;
@@ -48,5 +47,6 @@ public class VideoItem extends Item {
 	@Override
 	protected void clearItemContentView() {
 		view = null;
+		controller.tearDown();
 	}
 }

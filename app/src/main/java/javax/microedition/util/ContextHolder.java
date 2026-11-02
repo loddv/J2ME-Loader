@@ -1,6 +1,7 @@
 /*
  * Copyright 2012 Kulikov Dmitriy
- * Copyright 2017-2018 Nikita Shakarun
+ * Copyright 2017-2023 Nikita Shakarun
+ * Copyright 2019-2025 Yury Kharchenko
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,14 +18,15 @@
 
 package javax.microedition.util;
 
-import android.app.Application;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.os.Process;
 import android.os.Vibrator;
 import android.view.Display;
 import android.view.WindowManager;
+
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -43,10 +45,8 @@ import javax.microedition.lcdui.keyboard.VirtualKeyboard;
 import javax.microedition.shell.AppClassLoader;
 import javax.microedition.shell.MicroActivity;
 
-import androidx.core.app.ActivityCompat;
-import androidx.core.content.ContextCompat;
-
 import ru.playsoftware.j2meloader.BuildConfig;
+import ru.playsoftware.j2meloader.EmulatorApplication;
 import ru.playsoftware.j2meloader.config.Config;
 
 public class ContextHolder {
@@ -54,12 +54,11 @@ public class ContextHolder {
 	private static VirtualKeyboard vk;
 	private static WeakReference<MicroActivity> currentActivity;
 	private static Vibrator vibrator;
-	private static Context appContext;
 	private static final ArrayList<ActivityResultListener> resultListeners = new ArrayList<>();
 	private static boolean vibrationEnabled;
 
 	public static Context getAppContext() {
-		return appContext;
+		return EmulatorApplication.getInstance();
 	}
 
 	public static VirtualKeyboard getVk() {
@@ -100,6 +99,8 @@ public class ContextHolder {
 	}
 
 	public static void notifyOnActivityResult(int requestCode, int resultCode, Intent data) {
+		MicroActivity context = currentActivity.get();
+		context.setPauseSuppressed(false);
 		for (ActivityResultListener listener : resultListeners) {
 			listener.onActivityResult(requestCode, resultCode, data);
 		}
@@ -165,6 +166,12 @@ public class ContextHolder {
 		}
 	}
 
+	public static void startActivityForResult(Intent intent, int requestCode) {
+		MicroActivity context = currentActivity.get();
+		context.setPauseSuppressed(true);
+		context.startActivityForResult(intent, requestCode);
+	}
+
 	private static boolean hasPermissions(Context context, String... permissions) {
 		if (context != null && permissions != null) {
 			for (String permission : permissions) {
@@ -216,6 +223,19 @@ public class ContextHolder {
 		return true;
 	}
 
+	public static void vibratePeriodically(int durationOn, int durationOff) {
+		if (!vibrationEnabled) {
+			return;
+		}
+		if (vibrator == null) {
+			vibrator = (Vibrator) getAppContext().getSystemService(Context.VIBRATOR_SERVICE);
+		}
+		if (vibrator == null || !vibrator.hasVibrator()) {
+			return;
+		}
+		vibrator.vibrate(new long[]{0, durationOn, durationOff}, 1);
+	}
+
 	public static void vibrateKey(int duration) {
 		if (vibrator == null) {
 			vibrator = (Vibrator) getAppContext().getSystemService(Context.VIBRATOR_SERVICE);
@@ -224,10 +244,6 @@ public class ContextHolder {
 			return;
 		}
 		vibrator.vibrate(duration);
-	}
-
-	public static void setApplication(Application application) {
-		appContext = application;
 	}
 
 	public static void setVibration(boolean vibrationEnabled) {

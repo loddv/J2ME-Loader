@@ -1,34 +1,33 @@
 /*
- *  Copyright 2020 Yury Kharchenko
+ * Copyright 2020-2023 Yury Kharchenko
  *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package javax.microedition.lcdui.graphics;
 
+import static android.opengl.GLES20.*;
+
 import android.opengl.GLU;
 import android.util.Log;
-import android.widget.Toast;
 
 import java.nio.FloatBuffer;
 
-import javax.microedition.lcdui.ViewHandler;
 import javax.microedition.util.ContextHolder;
 
+import ru.playsoftware.j2meloader.R;
 import ru.playsoftware.j2meloader.config.ShaderInfo;
 import ru.playsoftware.j2meloader.util.FileUtils;
-
-import static android.opengl.GLES20.*;
 
 public class ShaderProgram {
 	private static final String TAG = ShaderProgram.class.getName();
@@ -53,10 +52,8 @@ public class ShaderProgram {
 					glReleaseShaderCompiler();
 					return;
 				}
-				ViewHandler.postEvent(() -> Toast.makeText(ContextHolder.getActivity(),
-						"Error loading shader - default shader is used!",
-						Toast.LENGTH_LONG).show());
 			}
+			ContextHolder.getActivity().toast(R.string.msg_error_loading_shader);
 		}
 		String vertexCode = ContextHolder.getAssetAsString(VERTEX);
 		String fragmentCode = ContextHolder.getAssetAsString(FRAGMENT);
@@ -101,8 +98,10 @@ public class ShaderProgram {
 			glDeleteShader(vertexId);
 			glDeleteShader(fragmentId);
 			glDeleteProgram(program);
-			return -1;
+			program = -1;
 		}
+		glDeleteShader(vertexId);
+		glDeleteShader(fragmentId);
 		return program;
 	}
 
@@ -135,6 +134,8 @@ public class ShaderProgram {
 		vbo.position(2);
 		glVertexAttribPointer(aTexCoord, 2, GL_FLOAT, false, 4 * 4, vbo);
 		glEnableVertexAttribArray(aTexCoord);
-		glUniform2f(uTexelDelta, 1.0f / width, 1.0f / height);
+		if (uTexelDelta >= 0) {
+			glUniform2f(uTexelDelta, 1.0f / width, 1.0f / height);
+		}
 	}
 }
