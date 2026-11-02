@@ -130,9 +130,11 @@ public class EmulatorApplication extends Application {
 		switch (theme) {
 			case "light":
 				AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO);
+				setTheme(R.style.AppTheme);
 				break;
 			case "dark":
 				AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_YES);
+				setTheme(R.style.ThemeOverlay_App_Dark);
 				break;
 			case "auto-battery":
 				AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_AUTO_BATTERY);

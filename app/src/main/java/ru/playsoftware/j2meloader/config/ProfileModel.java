@@ -194,13 +194,13 @@ public class ProfileModel {
 		touchInput = true;
 
 		vkButtonShape = VirtualKeyboard.ROUND_RECT_SHAPE;
-		vkAlpha = 64;
+		vkAlpha = 20;
 
+		vkFgColor = 0x0000FF;
 		vkBgColor = 0x000000;
-		vkFgColor = 0x000080;
-		vkBgColorSelected = 0x000080;
 		vkFgColorSelected = 0xFFFFFF;
-		vkOutlineColor = 0x000080;
+		vkBgColorSelected = 0x0000FF;
+		vkOutlineColor = 0x0000BE;
 		systemProperties = ContextHolder.getAssetAsString("defaults/system.props");
 
 		disablePause = false;

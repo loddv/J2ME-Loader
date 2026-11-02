@@ -13,7 +13,7 @@ android {
 
     defaultConfig {
         applicationId "ru.playsoftware.j2meloader"
-        minSdk MIN_SDK
+        minSdkVersion MIN_SDK
         targetSdk TARGET_SDK
         versionCode 101
         versionName "1.8.2"
@@ -37,20 +37,6 @@ android {
                 storeFile file(keystoreProps['storeFile'])
                 storePassword keystoreProps['storePassword']
             }
-            if (System.getenv()['BITRISE_IO']) {
-                keyAlias System.getenv('BITRISEIO_ANDROID_KEYSTORE_ALIAS')
-                keyPassword System.getenv('BITRISEIO_ANDROID_KEYSTORE_PRIVATE_KEY_PASSWORD')
-                storeFile rootProject.file(System.getenv('BITRISEIO_ANDROID_KEYSTORE_NAME'))
-                storePassword System.getenv('BITRISEIO_ANDROID_KEYSTORE_PASSWORD')
-            }
-//            else {
-//                Properties keystoreProps = new Properties()
-//                keystoreProps.load(new FileInputStream(rootProject.file("keystore.properties")))
-//                keyAlias keystoreProps['keyAlias']
-//                keyPassword keystoreProps['keyPassword']
-//                storeFile file(keystoreProps['storeFile'])
-//                storePassword keystoreProps['storePassword']
-//            }
         }
     }
 
@@ -197,12 +183,12 @@ dependencies {
     implementation "androidx.activity:activity:1.13.0"
     implementation 'androidx.appcompat:appcompat:1.8.0'
     implementation 'androidx.recyclerview:recyclerview:1.4.0'
-    implementation 'com.google.android.material:material:1.14.0' // api21
+    implementation 'com.google.android.material:material:1.13.0' // api21
     implementation 'androidx.preference:preference:1.2.1'
 
     // Networking && APIs
     implementation 'com.android.volley:volley:1.2.1'
-    implementation 'com.google.code.gson:gson:2.15.0'
+    implementation 'com.google.code.gson:gson:2.14.0'
     implementation 'com.google.guava:guava:33.7.2-android'
 
     // Threads, Streams and Archives
