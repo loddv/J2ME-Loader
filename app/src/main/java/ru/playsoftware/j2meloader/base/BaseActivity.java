@@ -28,11 +28,11 @@ public class BaseActivity extends AppCompatActivity {
 			getTheme().applyStyle(R.style.ThemeOverlay_App_Dark, true);
 		}
 		super.onCreate(savedInstanceState);
-		EdgeToEdge.enable(
-				this,
-				SystemBarStyle.dark(ContextCompat.getColor(this, R.color.primary)),
-				SystemBarStyle.dark(Color.BLACK)
-		);
+//		EdgeToEdge.enable(
+//				this,
+//				//SystemBarStyle.dark(ContextCompat.getColor(this, R.color.primary_dark))
+//				SystemBarStyle.dark(Color.BLACK)
+//		);
 		View view = findViewById(android.R.id.content);
 		ViewCompat.setOnApplyWindowInsetsListener(view, (v, windowInsets) -> {
 			Insets insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars() | WindowInsetsCompat.Type.displayCutout());

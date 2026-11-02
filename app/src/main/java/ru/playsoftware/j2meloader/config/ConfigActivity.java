@@ -51,15 +51,18 @@ import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.CompoundButton;
 import android.widget.EditText;
+import android.widget.LinearLayout;
 import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
+
+import com.google.android.material.bottomsheet.BottomSheetDialog;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.appcompat.app.AlertDialog;
+import android.widget.Button;
 import androidx.appcompat.widget.PopupMenu;
 import androidx.core.content.ContextCompat;
 import androidx.core.widget.TextViewCompat;
@@ -94,7 +97,7 @@ public class ConfigActivity extends BaseActivity implements View.OnClickListener
 
 	protected ArrayList<String> screenPresets = new ArrayList<>();
 	protected Set<String> customPresets = new HashSet<>();
-	private AlertDialog presetsDialog;
+	private BottomSheetDialog presetsDialog;
 	private ResolutionAdapter presetsAdapter;
 
 	protected ArrayList<int[]> fontPresetValues = new ArrayList<>();
@@ -164,12 +167,38 @@ public class ConfigActivity extends BaseActivity implements View.OnClickListener
 						}
 					}
 				}
-				new AlertDialog.Builder(this)
-						.setTitle(R.string.error)
-						.setMessage(getString(R.string.err_missing_app, storageName))
-						.setPositiveButton(R.string.exit, (d, w) -> finish())
-						.setCancelable(false)
-						.show();
+				BottomSheetDialog dialog = new BottomSheetDialog(this, com.google.android.material.R.style.Theme_Design_BottomSheetDialog);
+				LinearLayout layout = new LinearLayout(this);
+				layout.setOrientation(LinearLayout.VERTICAL);
+				int padding = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 16, getResources().getDisplayMetrics());
+				layout.setPadding(padding, padding, padding, padding);
+
+				TextView titleView = new TextView(this);
+				titleView.setText(R.string.error);
+				titleView.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_TitleLarge);
+				titleView.setPadding(0, 0, 0, padding / 2);
+				layout.addView(titleView);
+
+				TextView messageView = new TextView(this);
+				messageView.setText(getString(R.string.err_missing_app, storageName));
+				messageView.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodyMedium);
+				messageView.setPadding(0, 0, 0, padding);
+				layout.addView(messageView);
+
+				Button exitBtn = new Button(this, null, com.google.android.material.R.attr.materialButtonStyle);
+				exitBtn.setText(R.string.exit);
+				exitBtn.setOnClickListener(v -> {
+					dialog.dismiss();
+					finish();
+				});
+				LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+				params.gravity = android.view.Gravity.END;
+				exitBtn.setLayoutParams(params);
+				layout.addView(exitBtn);
+
+				dialog.setContentView(layout);
+				dialog.setCancelable(false);
+				dialog.show();
 				return;
 			}
 			dataDir = new File(workDir + Config.MIDLET_DATA_DIR + appDir.getName());
@@ -486,25 +515,46 @@ public class ConfigActivity extends BaseActivity implements View.OnClickListener
 
 	private void showCharsetPicker(View v) {
 		String[] charsets = Charset.availableCharsets().keySet().toArray(new String[0]);
-		new AlertDialog.Builder(this).setItems(charsets, (d, w) -> {
+		BottomSheetDialog bottomSheetDialog = new BottomSheetDialog(this,
+				com.google.android.material.R.style.Theme_Design_BottomSheetDialog);
+		LinearLayout layout = new LinearLayout(this);
+		layout.setOrientation(LinearLayout.VERTICAL);
+
+		TextView titleView = new TextView(this);
+		titleView.setText(R.string.pref_encoding_title);
+		titleView.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_TitleLarge);
+		int padding = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 16, getResources().getDisplayMetrics());
+		titleView.setPadding(padding, padding, padding, padding / 2);
+		layout.addView(titleView);
+
+		ListView listView = new ListView(this);
+		ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, charsets);
+		listView.setAdapter(adapter);
+		listView.setOnItemClickListener((parent, view1, position, id) -> {
 			String text = binding.systemProperties.getText().toString();
 			String key = "microedition.encoding:";
 			int idx = text.lastIndexOf(key);
 			if (idx != -1) {
 				int nl = text.indexOf('\n', idx);
-				text = text.substring(0, idx + key.length()) + " " + charsets[w] + (nl == -1 ? "\n" : text.substring(nl));
+				text = text.substring(0, idx + key.length()) + " " + charsets[position] + (nl == -1 ? "\n" : text.substring(nl));
 				binding.systemProperties.setText(text);
+				bottomSheetDialog.dismiss();
 				return;
 			}
 
 			if (!text.endsWith("\n")) {
-                binding.systemProperties.append("\n");
+				binding.systemProperties.append("\n");
 			}
-            binding.systemProperties.append(key);
-            binding.systemProperties.append(" ");
-            binding.systemProperties.append(charsets[w]);
-            binding.systemProperties.append("\n");
-		}).setTitle(R.string.pref_encoding_title).show();
+			binding.systemProperties.append(key);
+			binding.systemProperties.append(" ");
+			binding.systemProperties.append(charsets[position]);
+			binding.systemProperties.append("\n");
+			bottomSheetDialog.dismiss();
+		});
+		layout.addView(listView);
+
+		bottomSheetDialog.setContentView(layout);
+		bottomSheetDialog.show();
 	}
 
 	private void loadKeyLayout() {
@@ -843,13 +893,49 @@ public class ConfigActivity extends BaseActivity implements View.OnClickListener
 		return super.onOptionsItemSelected(item);
 	}
 
+	private void showBottomSheetMessage(int titleResId, String message, int positiveButtonResId, Runnable onPositive) {
+		BottomSheetDialog dialog = new BottomSheetDialog(this, com.google.android.material.R.style.Theme_Design_BottomSheetDialog);
+		LinearLayout layout = new LinearLayout(this);
+		layout.setOrientation(LinearLayout.VERTICAL);
+		int padding = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 16, getResources().getDisplayMetrics());
+		layout.setPadding(padding, padding, padding, padding);
+
+		TextView titleView = new TextView(this);
+		titleView.setText(titleResId);
+		titleView.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_TitleLarge);
+		titleView.setPadding(0, 0, 0, padding / 2);
+		layout.addView(titleView);
+
+		TextView messageView = new TextView(this);
+		messageView.setText(message);
+		messageView.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodyMedium);
+		messageView.setPadding(0, 0, 0, padding);
+		layout.addView(messageView);
+
+		LinearLayout buttonsLayout = new LinearLayout(this);
+		buttonsLayout.setOrientation(LinearLayout.HORIZONTAL);
+		buttonsLayout.setGravity(android.view.Gravity.END);
+
+		Button cancelBtn = new Button(this, null, android.R.attr.buttonStyle);
+		cancelBtn.setText(android.R.string.cancel);
+		cancelBtn.setOnClickListener(v -> dialog.dismiss());
+		buttonsLayout.addView(cancelBtn);
+
+		Button positiveBtn = new Button(this, null, com.google.android.material.R.attr.materialButtonStyle);
+		positiveBtn.setText(positiveButtonResId);
+		positiveBtn.setOnClickListener(v -> {
+			dialog.dismiss();
+			if (onPositive != null) onPositive.run();
+		});
+		buttonsLayout.addView(positiveBtn);
+
+		layout.addView(buttonsLayout);
+		dialog.setContentView(layout);
+		dialog.show();
+	}
+
 	private void showClearDataDialog() {
-		AlertDialog.Builder builder = new AlertDialog.Builder(this)
-				.setTitle(android.R.string.dialog_alert_title)
-				.setMessage(R.string.message_clear_data)
-				.setPositiveButton(android.R.string.ok, (d, w) -> FileUtils.clearDirectory(dataDir))
-				.setNegativeButton(android.R.string.cancel, null);
-		builder.show();
+		showBottomSheetMessage(android.R.string.dialog_alert_title, getString(R.string.message_clear_data), android.R.string.ok, () -> FileUtils.clearDirectory(dataDir));
 	}
 
 	private void startMIDlet() {
@@ -869,16 +955,32 @@ public class ConfigActivity extends BaseActivity implements View.OnClickListener
 			binding.screenWidth.setText(binding.screenHeight.getText().toString());
 			binding.screenHeight.setText(tmp);
 		} else if (id == R.id.show_font_size_presets) {
-			new AlertDialog.Builder(this)
-					.setTitle(getString(R.string.SIZE_PRESETS))
-					.setItems(fontPresetTitles.toArray(new String[0]),
-							(dialog, which) -> {
-								int[] values = fontPresetValues.get(which);
-								binding.fontSizeSmall.setText(Integer.toString(values[0]));
-								binding.fontSizeMedium.setText(Integer.toString(values[1]));
-								binding.fontSizeLarge.setText(Integer.toString(values[2]));
-							})
-					.show();
+			BottomSheetDialog bottomSheetDialog = new BottomSheetDialog(this,
+					com.google.android.material.R.style.Theme_Design_BottomSheetDialog);
+			LinearLayout layout = new LinearLayout(this);
+			layout.setOrientation(LinearLayout.VERTICAL);
+
+			TextView titleView = new TextView(this);
+			titleView.setText(R.string.SIZE_PRESETS);
+			titleView.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_TitleLarge);
+			int padding = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 16, getResources().getDisplayMetrics());
+			titleView.setPadding(padding, padding, padding, padding / 2);
+			layout.addView(titleView);
+
+			ListView listView = new ListView(this);
+			ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, fontPresetTitles);
+			listView.setAdapter(adapter);
+			listView.setOnItemClickListener((parent, view1, position, id1) -> {
+				int[] values = fontPresetValues.get(position);
+				binding.fontSizeSmall.setText(Integer.toString(values[0]));
+				binding.fontSizeMedium.setText(Integer.toString(values[1]));
+				binding.fontSizeLarge.setText(Integer.toString(values[2]));
+				bottomSheetDialog.dismiss();
+			});
+			layout.addView(listView);
+
+			bottomSheetDialog.setContentView(layout);
+			bottomSheetDialog.show();
 		} else if (id == R.id.select_screen_background_color) {
 			showColorPicker(binding.screenBackgroundHexColor);
 		} else if (id == R.id.update_keyboard_not_pressed_button_background_color) {
@@ -900,28 +1002,40 @@ public class ConfigActivity extends BaseActivity implements View.OnClickListener
 
 	private void showScreenPresets(View v) {
 		presetsAdapter = new ResolutionAdapter();
-		presetsDialog = new AlertDialog.Builder(this)
-				.setTitle(R.string.SIZE_PRESETS)
-				.setAdapter(presetsAdapter, (d, which) -> {
-					String string = screenPresets.get(which);
-					int separator = string.indexOf(RESOLUTION_TEMPLATE);
-					binding.screenWidth.setText(string.substring(0, separator));
-					binding.screenHeight.setText(string.substring(separator + 3));
-				})
-				.setNegativeButton(android.R.string.cancel, null)
-				.create();
-		presetsDialog.setOnShowListener(d -> {
-			ListView listView = ((AlertDialog) d).getListView();
-			listView.setOnItemLongClickListener((parent, view, position, id) -> {
-				String item = screenPresets.get(position);
-				if (!customPresets.contains(item)) {
-					Toast.makeText(this, R.string.preset_cannot_delete, Toast.LENGTH_SHORT).show();
-				} else {
-					showPresetPopup(view, item);
-				}
-				return true;
-			});
+		BottomSheetDialog bottomSheetDialog = new BottomSheetDialog(this,
+				com.google.android.material.R.style.Theme_Design_BottomSheetDialog);
+		LinearLayout layout = new LinearLayout(this);
+		layout.setOrientation(LinearLayout.VERTICAL);
+
+		TextView titleView = new TextView(this);
+		titleView.setText(R.string.SIZE_PRESETS);
+		titleView.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_TitleLarge);
+		int padding = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 16, getResources().getDisplayMetrics());
+		titleView.setPadding(padding, padding, padding, padding / 2);
+		layout.addView(titleView);
+
+		ListView listView = new ListView(this);
+		listView.setAdapter(presetsAdapter);
+		listView.setOnItemClickListener((parent, view1, which, id) -> {
+			String string = screenPresets.get(which);
+			int separator = string.indexOf(RESOLUTION_TEMPLATE);
+			binding.screenWidth.setText(string.substring(0, separator));
+			binding.screenHeight.setText(string.substring(separator + 3));
+			bottomSheetDialog.dismiss();
 		});
+		listView.setOnItemLongClickListener((parent, view1, position, id) -> {
+			String item = screenPresets.get(position);
+			if (!customPresets.contains(item)) {
+				Toast.makeText(this, R.string.preset_cannot_delete, Toast.LENGTH_SHORT).show();
+			} else {
+				showPresetPopup(view1, item);
+			}
+			return true;
+		});
+		layout.addView(listView);
+
+		bottomSheetDialog.setContentView(layout);
+		presetsDialog = bottomSheetDialog;
 		presetsDialog.show();
 	}
 
@@ -939,12 +1053,7 @@ public class ConfigActivity extends BaseActivity implements View.OnClickListener
 				showEditResolutionDialog(preset);
 			} else {
 				if (presetsDialog != null) presetsDialog.dismiss();
-				new AlertDialog.Builder(this)
-						.setTitle(R.string.delete_resolution_title)
-						.setMessage(getString(R.string.delete_resolution_message, preset))
-						.setPositiveButton(R.string.action_context_delete, (d, w) -> deleteCustomPreset(preset))
-						.setNegativeButton(android.R.string.cancel, null)
-						.show();
+				showBottomSheetMessage(R.string.delete_resolution_title, getString(R.string.delete_resolution_message, preset), R.string.action_context_delete, () -> deleteCustomPreset(preset));
 			}
 			return true;
 		});
@@ -958,23 +1067,53 @@ public class ConfigActivity extends BaseActivity implements View.OnClickListener
 		DialogChangePresetBinding dialogBinding = DialogChangePresetBinding.inflate(LayoutInflater.from(this));
 		dialogBinding.etWidth.setText(currentWidth);
 		dialogBinding.etHeight.setText(currentHeight);
-		new AlertDialog.Builder(this)
-				.setTitle(R.string.edit_resolution_title)
-				.setView(dialogBinding.getRoot())
-				.setPositiveButton(R.string.save, (d, w) -> {
-					int newW = parseInt(dialogBinding.etWidth.getText().toString().trim());
-					int newH = parseInt(dialogBinding.etHeight.getText().toString().trim());
-					if (newW <= 0 || newH <= 0) {
-						Toast.makeText(this, R.string.error, Toast.LENGTH_SHORT).show();
-						return;
-					}
-					String newPreset = newW + RESOLUTION_TEMPLATE + newH;
-					if (!newPreset.equals(preset)) {
-						updateCustomPreset(preset, newPreset);
-					}
-				})
-				.setNegativeButton(android.R.string.cancel, null)
-				.show();
+
+		BottomSheetDialog dialog = new BottomSheetDialog(this, com.google.android.material.R.style.Theme_Design_BottomSheetDialog);
+		LinearLayout layout = new LinearLayout(this);
+		layout.setOrientation(LinearLayout.VERTICAL);
+		int padding = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 16, getResources().getDisplayMetrics());
+		layout.setPadding(padding, padding, padding, padding);
+
+		TextView titleView = new TextView(this);
+		titleView.setText(R.string.edit_resolution_title);
+		titleView.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_TitleLarge);
+		titleView.setPadding(0, 0, 0, padding / 2);
+		layout.addView(titleView);
+
+		layout.addView(dialogBinding.getRoot());
+
+		LinearLayout buttonsLayout = new LinearLayout(this);
+		buttonsLayout.setOrientation(LinearLayout.HORIZONTAL);
+		buttonsLayout.setGravity(android.view.Gravity.END);
+		LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+		bp.topMargin = padding;
+		buttonsLayout.setLayoutParams(bp);
+
+		Button cancelBtn = new Button(this, null, android.R.attr.buttonStyle);
+		cancelBtn.setText(android.R.string.cancel);
+		cancelBtn.setOnClickListener(v -> dialog.dismiss());
+		buttonsLayout.addView(cancelBtn);
+
+		Button saveBtn = new Button(this, null, com.google.android.material.R.attr.materialButtonStyle);
+		saveBtn.setText(R.string.save);
+		saveBtn.setOnClickListener(v -> {
+			int newW = parseInt(dialogBinding.etWidth.getText().toString().trim());
+			int newH = parseInt(dialogBinding.etHeight.getText().toString().trim());
+			if (newW <= 0 || newH <= 0) {
+				Toast.makeText(this, R.string.error, Toast.LENGTH_SHORT).show();
+				return;
+			}
+			String newPreset = newW + RESOLUTION_TEMPLATE + newH;
+			if (!newPreset.equals(preset)) {
+				updateCustomPreset(preset, newPreset);
+			}
+			dialog.dismiss();
+		});
+		buttonsLayout.addView(saveBtn);
+
+		layout.addView(buttonsLayout);
+		dialog.setContentView(layout);
+		dialog.show();
 	}
 
 	private void updateCustomPreset(String oldPreset, String newPreset) {
